@@ -1,29 +1,38 @@
 package http
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/handler/middleware"
 )
 
-// NewRouter configures the router multiplexer using Go 1.22's enhanced path matching.
+// NewRouter configures the Gin router engine and registers routes and middleware.
 func NewRouter(handler *ShipmentHandler, logger *slog.Logger) http.Handler {
-	mux := http.NewServeMux()
+	// Create a clean Gin instance without default middleware
+	r := gin.New()
+
+	// Register custom slog request logger and standard Gin recovery middleware
+	r.Use(middleware.RequestLogger(logger))
+	r.Use(gin.Recovery())
 
 	// Health Check
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "UP"})
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "healthy",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 	})
 
 	// Shipment Resource Endpoints
-	mux.HandleFunc("POST /api/v1/shipments", handler.Create)
-	mux.HandleFunc("GET /api/v1/shipments", handler.List)
-	mux.HandleFunc("GET /api/v1/shipments/{id}", handler.Get)
+	v1 := r.Group("/api/v1")
+	{
+		v1.POST("/shipments", handler.Create)
+		v1.GET("/shipments", handler.List)
+		v1.GET("/shipments/:id", handler.Get)
+	}
 
-	// Apply structured logging middleware
-	return middleware.RequestLogger(logger)(mux)
+	return r
 }

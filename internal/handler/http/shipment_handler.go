@@ -1,10 +1,10 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/domain"
 )
 
@@ -30,15 +30,15 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *ShipmentHandler) Create(c *gin.Context) {
 	var req CreateShipmentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request payload")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.writeError(c, http.StatusBadRequest, "invalid request payload")
 		return
 	}
 
 	shipment, err := h.service.CreateShipment(
-		r.Context(),
+		c.Request.Context(),
 		req.Carrier,
 		req.TrackingNumber,
 		req.Weight,
@@ -46,64 +46,55 @@ func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Destination,
 	)
 	if err != nil {
-		h.handleError(w, err)
+		h.handleError(c, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(shipment)
+	c.JSON(http.StatusCreated, shipment)
 }
 
-func (h *ShipmentHandler) Get(w http.ResponseWriter, r *http.Request) {
-	// In Go 1.22+, PathValue retrieves values from the matched pattern (e.g. /shipments/{id})
-	id := r.PathValue("id")
+func (h *ShipmentHandler) Get(c *gin.Context) {
+	id := c.Param("id")
 	if id == "" {
-		h.writeError(w, http.StatusBadRequest, "missing shipment id")
+		h.writeError(c, http.StatusBadRequest, "missing shipment id")
 		return
 	}
 
-	shipment, err := h.service.GetShipment(r.Context(), id)
+	shipment, err := h.service.GetShipment(c.Request.Context(), id)
 	if err != nil {
-		h.handleError(w, err)
+		h.handleError(c, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(shipment)
+	c.JSON(http.StatusOK, shipment)
 }
 
-func (h *ShipmentHandler) List(w http.ResponseWriter, r *http.Request) {
-	shipments, err := h.service.ListShipments(r.Context())
+func (h *ShipmentHandler) List(c *gin.Context) {
+	shipments, err := h.service.ListShipments(c.Request.Context())
 	if err != nil {
-		h.handleError(w, err)
+		h.handleError(c, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(shipments)
+	c.JSON(http.StatusOK, shipments)
 }
 
-func (h *ShipmentHandler) handleError(w http.ResponseWriter, err error) {
+func (h *ShipmentHandler) handleError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrShipmentNotFound):
-		h.writeError(w, http.StatusNotFound, err.Error())
+		h.writeError(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrShipmentAlreadyExists):
-		h.writeError(w, http.StatusConflict, err.Error())
+		h.writeError(c, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrCarrierRequired),
 		errors.Is(err, domain.ErrTrackingNumberRequired),
 		errors.Is(err, domain.ErrInvalidWeight),
 		errors.Is(err, domain.ErrInvalidShipment):
-		h.writeError(w, http.StatusBadRequest, err.Error())
+		h.writeError(c, http.StatusBadRequest, err.Error())
 	default:
-		h.writeError(w, http.StatusInternalServerError, "internal server error")
+		h.writeError(c, http.StatusInternalServerError, "internal server error")
 	}
 }
 
-func (h *ShipmentHandler) writeError(w http.ResponseWriter, statusCode int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: message})
+func (h *ShipmentHandler) writeError(c *gin.Context, statusCode int, message string) {
+	c.JSON(statusCode, ErrorResponse{Error: message})
 }

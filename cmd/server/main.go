@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/config"
 	delivery "github.com/kavindus/multi-carrier-shipping-golang/internal/handler/http"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/repository"
@@ -25,12 +26,14 @@ func main() {
 	var logger *slog.Logger
 	if cfg.Env == "production" {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		gin.SetMode(gin.ReleaseMode)
 	} else {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		gin.SetMode(gin.DebugMode)
 	}
 	slog.SetDefault(logger)
 
-	logger.Info("Starting multi-carrier shipping microservice", slog.String("env", cfg.Env))
+	logger.Info("Starting multi-carrier shipping microservice (Gin Framework)", slog.String("env", cfg.Env))
 
 	// 3. Initialize Repositories (In-memory mock)
 	repo := repository.NewMemoryShipmentRepository()

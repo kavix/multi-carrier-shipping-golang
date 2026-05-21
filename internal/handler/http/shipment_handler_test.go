@@ -10,12 +10,16 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/domain"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/repository"
 	"github.com/kavindus/multi-carrier-shipping-golang/internal/service"
 )
 
 func TestShipmentHandler(t *testing.T) {
+	// Set Gin to Test Mode to avoid logging verbosity
+	gin.SetMode(gin.TestMode)
+
 	repo := repository.NewMemoryShipmentRepository()
 	svc := service.NewShipmentService(repo)
 	handler := NewShipmentHandler(svc)
