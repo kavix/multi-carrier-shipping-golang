@@ -1,18 +1,26 @@
-.PHONY: all run build test fmt vet clean
+.PHONY: all run run-shipment run-label build test fmt vet clean
 
 # Variables
-BINARY_NAME=server
-CMD_DIR=./cmd/server
 BUILD_DIR=./bin
 
 all: fmt vet test build
 
+run-shipment:
+	@PORT=8081 LABEL_SERVICE_URL=http://localhost:8082 go run ./cmd/shipment_service/main.go
+
+run-label:
+	@PORT=8082 SHIPMENT_SERVICE_URL=http://localhost:8081 go run ./cmd/label_service/main.go
+
 run:
-	@go run $(CMD_DIR)/main.go
+	@echo "Starting both Shipment and Label microservices..."
+	@(trap 'kill 0' SIGINT; \
+	PORT=8082 SHIPMENT_SERVICE_URL=http://localhost:8081 go run ./cmd/label_service/main.go & \
+	PORT=8081 LABEL_SERVICE_URL=http://localhost:8082 go run ./cmd/shipment_service/main.go)
 
 build:
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)/main.go
+	@go build -o $(BUILD_DIR)/shipment_service ./cmd/shipment_service/main.go
+	@go build -o $(BUILD_DIR)/label_service ./cmd/label_service/main.go
 
 test:
 	@go test -v ./...
@@ -21,7 +29,7 @@ fmt:
 	@go fmt ./...
 
 vet:
-	@go vet ./...
+	@go fmt ./... && go vet ./...
 
 clean:
 	@rm -rf $(BUILD_DIR)
