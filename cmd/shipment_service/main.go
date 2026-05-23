@@ -29,6 +29,21 @@ func main() {
 		labelServiceURL = "http://localhost:8082"
 	}
 
+	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
+	if authServiceURL == "" {
+		authServiceURL = "http://localhost:8083"
+	}
+
+	notificationServiceURL := os.Getenv("NOTIFICATION_SERVICE_URL")
+	if notificationServiceURL == "" {
+		notificationServiceURL = "http://localhost:8084"
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "shipments.db"
+	}
+
 	var logger *slog.Logger
 	if cfg.Env == "production" {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -39,11 +54,16 @@ func main() {
 
 	logger.Info("Starting Shipment Microservice", slog.String("env", cfg.Env), slog.String("port", port))
 
-	// 1. Initialize DB (Memory Database isolated for Shipments)
-	repo := shipment.NewMemoryShipmentRepository()
+	// 1. Initialize SQLite Database
+	repo, err := shipment.NewSQLiteShipmentRepository(dbPath)
+	if err != nil {
+		logger.Error("Failed to initialize sqlite repository", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer repo.Close()
 
 	// 2. Initialize Service & Handlers
-	svc := shipment.NewShipmentService(repo, labelServiceURL)
+	svc := shipment.NewShipmentService(repo, labelServiceURL, authServiceURL, notificationServiceURL)
 	hdlr := shipment.NewShipmentHandler(svc)
 	router := shipment.ConfigureRouter(hdlr, logger)
 

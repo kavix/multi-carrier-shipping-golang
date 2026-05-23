@@ -57,5 +57,5 @@ type LabelService interface {
 	CreateLabel(ctx context.Context, shipmentID, carrier string, weight float64, origin, destination string) (*Label, error)
 	GetLabelByTracking(ctx context.Context, trackingNumber string) (*Label, error)
 	TrackLabel(ctx context.Context, trackingNumber string) (string, error)
-	CancelLabel(ctx context.Context, trackingNumber string) error
+	CancelLabel(ctx context.Context, token, trackingNumber string) error
 }

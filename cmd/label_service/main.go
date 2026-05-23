@@ -29,6 +29,16 @@ func main() {
 		shipmentServiceURL = "http://localhost:8081"
 	}
 
+	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
+	if authServiceURL == "" {
+		authServiceURL = "http://localhost:8083"
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "labels.db"
+	}
+
 	var logger *slog.Logger
 	if cfg.Env == "production" {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -39,8 +49,13 @@ func main() {
 
 	logger.Info("Starting Label Microservice", slog.String("env", cfg.Env), slog.String("port", port))
 
-	// 1. Initialize DB (Memory Database isolated for Labels)
-	repo := label.NewMemoryLabelRepository()
+	// 1. Initialize SQLite Database
+	repo, err := label.NewSQLiteLabelRepository(dbPath)
+	if err != nil {
+		logger.Error("Failed to initialize sqlite repository", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer repo.Close()
 
 	// 2. Initialize FedEx client
 	fedexClient := label.NewFedExClient(
@@ -50,7 +65,7 @@ func main() {
 	)
 
 	// 3. Initialize Service & Handlers
-	svc := label.NewLabelService(repo, fedexClient, shipmentServiceURL)
+	svc := label.NewLabelService(repo, fedexClient, shipmentServiceURL, authServiceURL)
 	hdlr := label.NewLabelHandler(svc)
 	router := label.ConfigureRouter(hdlr, logger)
 

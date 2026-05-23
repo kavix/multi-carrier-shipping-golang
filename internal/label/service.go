@@ -1,7 +1,10 @@
 package label
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,16 +15,80 @@ type labelService struct {
 	repo               LabelRepository
 	carrierSvc         CarrierService
 	shipmentServiceURL string
+	authServiceURL     string
 	httpClient         *http.Client
 }
 
 // NewLabelService instantiates a new LabelService implementation.
-func NewLabelService(repo LabelRepository, carrierSvc CarrierService, shipmentServiceURL string) LabelService {
+func NewLabelService(repo LabelRepository, carrierSvc CarrierService, shipmentServiceURL, authServiceURL string) LabelService {
 	return &labelService{
 		repo:               repo,
 		carrierSvc:         carrierSvc,
 		shipmentServiceURL: strings.TrimSuffix(shipmentServiceURL, "/"),
-		httpClient:         &http.Client{Timeout: 5 * time.Second},
+		authServiceURL:     strings.TrimSuffix(authServiceURL, "/"),
+		httpClient:         &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+// Helper to verify auth token with Auth Microservice
+func (s *labelService) verifyToken(ctx context.Context, token string) (string, error) {
+	if token == "" {
+		return "", errors.New("unauthorized: missing token")
+	}
+
+	verifyURL := fmt.Sprintf("%s/api/v1/auth/verify?token=%s", s.authServiceURL, token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, verifyURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create verify request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("auth service is currently unavailable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return "", errors.New("unauthorized: invalid or expired session token")
+	} else if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("auth verification failed with status %d", resp.StatusCode)
+	}
+
+	var data struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return "", fmt.Errorf("failed to decode verify response: %w", err)
+	}
+
+	return data.Username, nil
+}
+
+// Helper to log user actions with Auth Microservice
+func (s *labelService) logAction(ctx context.Context, username, action string) {
+	if username == "" || s.authServiceURL == "" {
+		return
+	}
+
+	payload := map[string]string{
+		"username": username,
+		"action":   action,
+	}
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	logURL := fmt.Sprintf("%s/api/v1/auth/logs", s.authServiceURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, logURL, bytes.NewReader(jsonBytes))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err == nil {
+		resp.Body.Close()
 	}
 }
 
@@ -140,7 +207,13 @@ func (s *labelService) TrackLabel(ctx context.Context, trackingNumber string) (s
 	return label.Status, nil
 }
 
-func (s *labelService) CancelLabel(ctx context.Context, trackingNumber string) error {
+func (s *labelService) CancelLabel(ctx context.Context, token, trackingNumber string) error {
+	// 1. Authenticate session
+	username, err := s.verifyToken(ctx, token)
+	if err != nil {
+		return err
+	}
+
 	if trackingNumber == "" {
 		return ErrTrackingNumberRequired
 	}
@@ -154,13 +227,13 @@ func (s *labelService) CancelLabel(ctx context.Context, trackingNumber string) e
 		return ErrLabelAlreadyCancelled
 	}
 
-	// Update label status in our local Database
+	// Update local state in SQLite
 	label.Status = "CANCELLED"
 	if err := s.repo.Update(ctx, label); err != nil {
 		return err
 	}
 
-	// Make synchronous HTTP call to Shipment Service to update shipment status to CANCELLED
+	// Synchronous call to Shipment Service to cancel the shipment
 	if s.shipmentServiceURL != "" {
 		cancelURL := fmt.Sprintf("%s/api/v1/shipments/tracking/%s/cancel", s.shipmentServiceURL, trackingNumber)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut, cancelURL, nil)
@@ -178,6 +251,9 @@ func (s *labelService) CancelLabel(ctx context.Context, trackingNumber string) e
 			}
 		}
 	}
+
+	// Log audit entry
+	s.logAction(ctx, username, fmt.Sprintf("Cancel Label (Tracking: %s)", trackingNumber))
 
 	return nil
 }

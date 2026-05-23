@@ -3,12 +3,21 @@ package label
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 )
 
 func TestCreateLabel(t *testing.T) {
-	repo := NewMemoryLabelRepository()
-	svc := NewLabelService(repo, nil, "")
+	dbFile := "test_labels.db"
+	defer os.Remove(dbFile)
+
+	repo, err := NewSQLiteLabelRepository(dbFile)
+	if err != nil {
+		t.Fatalf("failed to open test sqlite db: %v", err)
+	}
+	defer repo.Close()
+
+	svc := NewLabelService(repo, nil, "", "")
 	ctx := context.Background()
 
 	t.Run("successful creation", func(t *testing.T) {
