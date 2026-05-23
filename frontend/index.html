@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,10 +8,12 @@
   <!-- Google Fonts Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
   <!-- Background Glowing Orbs -->
@@ -32,7 +35,7 @@
   </header>
 
   <main class="main-container">
-    
+
     <!-- AUTHENTICATION PANELS (Display if not logged in) -->
     <section id="authSection" class="glass-panel auth-card">
       <div class="auth-toggle">
@@ -74,10 +77,10 @@
 
     <!-- DASHBOARD CONTAINER (Display if logged in) -->
     <div id="dashboardContainer" style="display: none;">
-      
+
       <!-- Top Row Statistics & Activity logs -->
       <div class="grid-2-col">
-        
+
         <!-- Add Shipment Card -->
         <section class="glass-panel form-card">
           <div class="card-header">
@@ -143,7 +146,7 @@
             </div>
             <button id="refreshShipmentsBtn" class="btn btn-secondary btn-sm">REFRESH TABLE</button>
           </div>
-          
+
           <div class="table-container">
             <table class="premium-table">
               <thead>
@@ -182,6 +185,49 @@
         </section>
 
       </div>
+
+      <!-- Global Carrier Intelligence -->
+      <section class="glass-panel carrier-stats-card">
+        <div class="card-header carrier-stats-header">
+          <div>
+            <h3>Global Carrier Intelligence</h3>
+            <p class="subtitle">Live FreightPulse signals for ports, rates, fuel, disruptions, and carrier reliability.
+            </p>
+          </div>
+          <div class="carrier-stats-actions">
+            <span class="badge badge-sky">FREIGHTPULSE LIVE</span>
+            <button id="refreshCarrierStatsBtn" class="btn btn-secondary btn-sm">REFRESH INTEL</button>
+          </div>
+        </div>
+
+        <div class="carrier-stats-grid">
+          <article class="carrier-stat-card" id="portCongestionCard">
+            <p class="placeholder-text">Loading port congestion data...</p>
+          </article>
+          <article class="carrier-stat-card" id="freightRatesCard">
+            <p class="placeholder-text">Loading freight rates data...</p>
+          </article>
+          <article class="carrier-stat-card" id="fuelPricesCard">
+            <p class="placeholder-text">Loading fuel prices data...</p>
+          </article>
+          <article class="carrier-stat-card" id="disruptionsCard">
+            <p class="placeholder-text">Loading disruption data...</p>
+          </article>
+          <article class="carrier-stat-card" id="carriersCard">
+            <p class="placeholder-text">Loading carrier data...</p>
+          </article>
+        </div>
+
+        <div class="carrier-stats-bottom">
+          <div class="card-header compact">
+            <h3>Carrier Stats Logs</h3>
+            <span class="badge badge-emerald">MONGODB</span>
+          </div>
+          <div class="timeline-container carrier-stats-log-timeline" id="carrierStatsLogTimeline">
+            <p class="placeholder-text">No carrier stats logs recorded yet.</p>
+          </div>
+        </div>
+      </section>
 
     </div>
 
@@ -258,4 +304,5 @@
   <!-- JavaScript -->
   <script src="app.js"></script>
 </body>
+
 </html>

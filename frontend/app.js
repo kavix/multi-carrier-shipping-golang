@@ -3,6 +3,7 @@ const AUTH_SVC_URL = 'http://localhost:8083';
 const SHIPMENT_SVC_URL = 'http://localhost:8081';
 const LABEL_SVC_URL = 'http://localhost:8082';
 const NOTIFICATION_SVC_URL = 'http://localhost:8084';
+const CARRIER_STATS_SVC_URL = 'http://localhost:8085';
 
 // State Management
 let sessionToken = localStorage.getItem('session_token') || '';
@@ -26,6 +27,14 @@ const createMessage = document.getElementById('createMessage');
 const shipmentsTableBody = document.getElementById('shipmentsTableBody');
 const refreshShipmentsBtn = document.getElementById('refreshShipmentsBtn');
 const auditTimeline = document.getElementById('auditTimeline');
+
+const refreshCarrierStatsBtn = document.getElementById('refreshCarrierStatsBtn');
+const portCongestionCard = document.getElementById('portCongestionCard');
+const freightRatesCard = document.getElementById('freightRatesCard');
+const fuelPricesCard = document.getElementById('fuelPricesCard');
+const disruptionsCard = document.getElementById('disruptionsCard');
+const carriersCard = document.getElementById('carriersCard');
+const carrierStatsLogTimeline = document.getElementById('carrierStatsLogTimeline');
 
 // Modals
 const editModal = document.getElementById('editModal');
@@ -74,6 +83,9 @@ function setupEventListeners() {
   // Shipment Operations
   createShipmentForm.addEventListener('submit', handleCreateShipment);
   refreshShipmentsBtn.addEventListener('click', loadShipmentsAndLogs);
+  if (refreshCarrierStatsBtn) {
+    refreshCarrierStatsBtn.addEventListener('click', loadCarrierStats);
+  }
 
   // Modals Actions
   closeEditModal.addEventListener('click', () => editModal.style.display = 'none');
@@ -202,6 +214,7 @@ async function loadShipmentsAndLogs() {
   loadShipments();
   loadAuditLogs();
   loadNotificationLogs();
+  loadCarrierStats();
 }
 
 // CRUD Shipment - Create
@@ -254,7 +267,7 @@ async function loadShipments() {
     shipmentsTableBody.innerHTML = shipments.map(s => {
       const createdDate = new Date(s.created_at).toLocaleString();
       const updatedDate = new Date(s.updated_at).toLocaleString();
-      
+
       let statusClass = 'status-pending';
       if (s.status === 'CREATED') statusClass = 'status-created';
       if (s.status === 'CANCELLED') statusClass = 'status-cancelled';
@@ -298,7 +311,7 @@ function openEditShipment(id, carrier, weight, origin, destination, status) {
   document.getElementById('editWeight').value = weight;
   document.getElementById('editOrigin').value = origin;
   document.getElementById('editDestination').value = destination;
-  
+
   // Show transit status dropdown only for admin
   const statusGroup = document.getElementById('editStatusGroup');
   if (currentUsername === 'admin') {
@@ -307,7 +320,7 @@ function openEditShipment(id, carrier, weight, origin, destination, status) {
   } else {
     statusGroup.style.display = 'none';
   }
-  
+
   hideAlert(editMessage);
   editModal.style.display = 'flex';
 }
@@ -319,7 +332,7 @@ async function handleUpdateShipment(e) {
   const weight = parseFloat(document.getElementById('editWeight').value);
   const origin = document.getElementById('editOrigin').value;
   const destination = document.getElementById('editDestination').value;
-  
+
   // Capture status change if admin
   const status = currentUsername === 'admin' ? document.getElementById('editStatus').value : '';
 
@@ -521,7 +534,7 @@ function showAlert(element, message, type) {
   element.textContent = message;
   element.className = `alert alert-${type}`;
   element.style.display = 'block';
-  
+
   // Auto fade out create alert after 6s
   if (element === createMessage) {
     setTimeout(() => hideAlert(element), 6000);
@@ -537,7 +550,7 @@ function hideAlert(element) {
 async function loadNotificationLogs() {
   const timelineEl = document.getElementById('notificationHubTimeline');
   if (!timelineEl) return;
-  
+
   try {
     const response = await fetch(`${NOTIFICATION_SVC_URL}/api/v1/notifications`);
     if (!response.ok) throw new Error('Failed to retrieve notification logs');
@@ -553,7 +566,7 @@ async function loadNotificationLogs() {
       const isEmail = l.method === 'EMAIL';
       const icon = isEmail ? '✉️' : '💬';
       const badgeClass = isEmail ? 'badge-email' : 'badge-telegram';
-      
+
       let bodyText = l.body;
       if (isEmail) {
         try {
@@ -587,4 +600,283 @@ async function loadNotificationLogs() {
     console.error('Failed to load notification logs:', err);
     timelineEl.innerHTML = `<p class="placeholder-text alert-error" style="background: none;">Failed to sync with Notification Hub.</p>`;
   }
+}
+
+async function loadCarrierStats() {
+  const requests = [
+    { key: 'portCongestion', url: `${CARRIER_STATS_SVC_URL}/api/v1/carrier-stats/port-congestion` },
+    { key: 'freightRates', url: `${CARRIER_STATS_SVC_URL}/api/v1/carrier-stats/freight-rates` },
+    { key: 'fuelPrices', url: `${CARRIER_STATS_SVC_URL}/api/v1/carrier-stats/fuel-prices` },
+    { key: 'disruptions', url: `${CARRIER_STATS_SVC_URL}/api/v1/carrier-stats/disruptions` },
+    { key: 'carriers', url: `${CARRIER_STATS_SVC_URL}/api/v1/carrier-stats/carriers` },
+    { key: 'logs', url: `${CARRIER_STATS_SVC_URL}/api/v1/carrier-stats/logs?limit=12` },
+  ];
+
+  const results = await Promise.all(requests.map(async (request) => {
+    try {
+      const response = await fetch(request.url);
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      return { key: request.key, data: await response.json() };
+    } catch (error) {
+      return { key: request.key, error };
+    }
+  }));
+
+  const resultMap = Object.fromEntries(results.map((result) => [result.key, result]));
+
+  renderCarrierStatCard(portCongestionCard, renderPortCongestionCard(resultMap.portCongestion));
+  renderCarrierStatCard(freightRatesCard, renderFreightRatesCard(resultMap.freightRates));
+  renderCarrierStatCard(fuelPricesCard, renderFuelPricesCard(resultMap.fuelPrices));
+  renderCarrierStatCard(disruptionsCard, renderDisruptionsCard(resultMap.disruptions));
+  renderCarrierStatCard(carriersCard, renderCarriersCard(resultMap.carriers));
+  renderCarrierStatsLogs(resultMap.logs);
+}
+
+function renderCarrierStatCard(element, content) {
+  if (!element) return;
+  element.innerHTML = content;
+}
+
+function renderCarrierStatError(title, message) {
+  return `
+    <div class="carrier-stat-card-header">
+      <span class="carrier-stat-kicker">${title}</span>
+    </div>
+    <p class="placeholder-text alert-error" style="background: none; margin: auto 0;">${message}</p>
+  `;
+}
+
+function formatNumber(value, digits = 0) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
+  return Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatCurrency(value, digits = 0) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
+  return `$${Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
+}
+
+function formatMaybeDate(value) {
+  if (!value) return 'N/A';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleString();
+}
+
+function renderChips(items, severityClass = '') {
+  if (!Array.isArray(items) || items.length === 0) {
+    return '<span class="carrier-stat-note">No active alerts</span>';
+  }
+
+  return `
+    <div class="carrier-chip-row">
+      ${items.slice(0, 3).map((item) => `<span class="carrier-chip ${severityClass}">${item}</span>`).join('')}
+    </div>
+  `;
+}
+
+function renderPortCongestionCard(result) {
+  if (!result || result.error) {
+    return renderCarrierStatError('PORT CONGESTION', 'Unable to load live port congestion data.');
+  }
+
+  const payload = result.data || {};
+  const summary = payload?.data?.data?.global_summary || {};
+  const ports = [...(payload?.data?.data?.ports || [])].sort((left, right) => (right.congestion_index || 0) - (left.congestion_index || 0)).slice(0, 4);
+
+  return `
+    <div class="carrier-stat-card-header">
+      <span class="carrier-stat-kicker">PORT CONGESTION</span>
+      <span class="carrier-stat-pill">${formatNumber(payload?.data?.total_ports || ports.length)} ports tracked</span>
+    </div>
+    <div class="carrier-stat-metrics">
+      <div><strong>${formatNumber(summary.avg_congestion_index, 0)}</strong><span>Avg index</span></div>
+      <div><strong>${formatNumber(summary.ports_high_congestion, 0)}</strong><span>High</span></div>
+      <div><strong>${formatNumber(summary.ports_moderate, 0)}</strong><span>Moderate</span></div>
+    </div>
+    <div class="carrier-stat-list">
+      ${ports.map((port) => `
+        <div class="carrier-stat-row">
+          <span>${port.port || 'Unknown Port'}</span>
+          <span>${formatNumber(port.congestion_index, 0)} | ${String(port.congestion_level || 'n/a').toUpperCase()}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="carrier-stat-footer">
+      ${renderChips(summary.active_disruptions || [])}
+      <div class="carrier-stat-note" style="margin-top: 0.5rem;">Updated ${formatMaybeDate(payload?.data?.timestamp)}</div>
+    </div>
+  `;
+}
+
+function renderFreightRatesCard(result) {
+  if (!result || result.error) {
+    return renderCarrierStatError('FREIGHT RATES', 'Unable to load live freight rates data.');
+  }
+
+  const payload = result.data || {};
+  const ocean = payload?.data?.data?.ocean || {};
+  const indices = ocean.indices || {};
+  const routes = [...(ocean.container_rates || [])].sort((left, right) => (right.rate_40hc || 0) - (left.rate_40hc || 0)).slice(0, 3);
+  const marketSummary = payload?.data?.data?.market_summary || {};
+
+  return `
+    <div class="carrier-stat-card-header">
+      <span class="carrier-stat-kicker">FREIGHT RATES</span>
+      <span class="carrier-stat-pill">${payload?.data?.currency || 'USD'}</span>
+    </div>
+    <div class="carrier-stat-metrics">
+      <div><strong>${formatNumber(indices.fbx_global, 0)}</strong><span>FBX Global</span></div>
+      <div><strong>${formatNumber(indices.scfi, 0)}</strong><span>SCFI</span></div>
+      <div><strong>${formatNumber(indices.wci, 0)}</strong><span>WCI</span></div>
+    </div>
+    <div class="carrier-stat-list">
+      ${routes.map((route) => `
+        <div class="carrier-stat-row">
+          <span>${route.route || 'Route'}</span>
+          <span>${formatCurrency(route.rate_40hc, 0)} | ${formatNumber(route.transit_days, 0)}d</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="carrier-stat-footer carrier-stat-note">${marketSummary.ocean_outlook || 'Ocean outlook unavailable.'}</div>
+  `;
+}
+
+function renderFuelPricesCard(result) {
+  if (!result || result.error) {
+    return renderCarrierStatError('FUEL PRICES', 'Unable to load live fuel price data.');
+  }
+
+  const payload = result.data || {};
+  const data = payload?.data?.data || {};
+  const diesel = data.diesel || {};
+  const gasoline = data.gasoline || {};
+  const bunker = data.bunker_fuel || {};
+  const historical = data.historical || {};
+
+  return `
+    <div class="carrier-stat-card-header">
+      <span class="carrier-stat-kicker">FUEL PRICES</span>
+      <span class="carrier-stat-pill">${payload?.data?.unit || 'gallon'}</span>
+    </div>
+    <div class="carrier-stat-metrics">
+      <div><strong>${formatCurrency(diesel.national_average, 2)}</strong><span>Diesel avg</span></div>
+      <div><strong>${formatCurrency(gasoline.national_average, 2)}</strong><span>Gasoline avg</span></div>
+      <div><strong>${formatCurrency(bunker.vlsfo, 0)}</strong><span>VLSFO</span></div>
+    </div>
+    <div class="carrier-stat-list">
+      <div class="carrier-stat-row"><span>Diesel 30d avg</span><span>${formatCurrency(historical.diesel_30d_avg, 2)}</span></div>
+      <div class="carrier-stat-row"><span>Diesel 90d avg</span><span>${formatCurrency(historical.diesel_90d_avg, 2)}</span></div>
+      <div class="carrier-stat-row"><span>Diesel YoY change</span><span>${formatNumber(historical.diesel_yoy_change, 1)}%</span></div>
+    </div>
+    <div class="carrier-stat-footer carrier-stat-note">Updated ${formatMaybeDate(diesel.updated_at || gasoline.updated_at || payload?.data?.timestamp)}</div>
+  `;
+}
+
+function renderDisruptionsCard(result) {
+  if (!result || result.error) {
+    return renderCarrierStatError('DISRUPTIONS', 'Unable to load live disruption data.');
+  }
+
+  const payload = result.data || {};
+  const data = payload?.data?.data || {};
+  const alerts = data.alerts || [];
+  const topAlerts = alerts.slice(0, 3);
+  const riskForecast = data.risk_forecast || {};
+
+  return `
+    <div class="carrier-stat-card-header">
+      <span class="carrier-stat-kicker">DISRUPTIONS</span>
+      <span class="carrier-stat-pill">${formatNumber(data.active_alerts, 0)} active</span>
+    </div>
+    <div class="carrier-stat-metrics">
+      <div><strong>${formatNumber(data.active_alerts, 0)}</strong><span>Alerts</span></div>
+      <div><strong>${(riskForecast.next_7_days || 'n/a').toUpperCase()}</strong><span>7d outlook</span></div>
+      <div><strong>${formatNumber((data.resolved_recently || []).length, 0)}</strong><span>Resolved</span></div>
+    </div>
+    <div class="carrier-stat-list">
+      ${topAlerts.map((alert) => `
+        <div class="carrier-stat-row">
+          <span>${alert.title || 'Alert'}</span>
+          <span>${String(alert.severity || 'low').toUpperCase()}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="carrier-stat-footer">
+      ${renderChips(riskForecast.factors || [], 'severity-low')}
+      <div class="carrier-stat-note" style="margin-top: 0.5rem;">${riskForecast.next_7_days ? `Forecast: ${riskForecast.next_7_days}` : 'Risk forecast unavailable.'}</div>
+    </div>
+  `;
+}
+
+function renderCarriersCard(result) {
+  if (!result || result.error) {
+    return renderCarrierStatError('CARRIERS', 'Unable to load live carrier reliability data.');
+  }
+
+  const payload = result.data || {};
+  const data = payload?.data?.data || {};
+  const ocean = data.ocean || [];
+  const trucking = data.trucking || [];
+  const air = data.air || [];
+
+  const topOcean = [...ocean].sort((left, right) => (right.reliability_score || 0) - (left.reliability_score || 0))[0];
+  const topTrucking = [...trucking].sort((left, right) => (right.reliability_score || 0) - (left.reliability_score || 0))[0];
+  const topAir = [...air].sort((left, right) => (right.reliability_score || 0) - (left.reliability_score || 0))[0];
+
+  return `
+    <div class="carrier-stat-card-header">
+      <span class="carrier-stat-kicker">CARRIER RELIABILITY</span>
+      <span class="carrier-stat-pill">${formatNumber(ocean.length + trucking.length + air.length, 0)} carriers</span>
+    </div>
+    <div class="carrier-stat-metrics">
+      <div><strong>${formatNumber(ocean.length, 0)}</strong><span>Ocean</span></div>
+      <div><strong>${formatNumber(trucking.length, 0)}</strong><span>Trucking</span></div>
+      <div><strong>${formatNumber(air.length, 0)}</strong><span>Air</span></div>
+    </div>
+    <div class="carrier-stat-list">
+      <div class="carrier-stat-row"><span>${topOcean?.name || 'Ocean carrier'}</span><span>${formatNumber(topOcean?.reliability_score, 0)}</span></div>
+      <div class="carrier-stat-row"><span>${topTrucking?.name || 'Trucking carrier'}</span><span>${formatNumber(topTrucking?.reliability_score, 0)}</span></div>
+      <div class="carrier-stat-row"><span>${topAir?.name || 'Air carrier'}</span><span>${formatNumber(topAir?.reliability_score, 0)}</span></div>
+    </div>
+    <div class="carrier-stat-footer carrier-stat-note">Top reliability snapshot across ocean, trucking, and air carriers.</div>
+  `;
+}
+
+function renderCarrierStatsLogs(result) {
+  if (!carrierStatsLogTimeline) return;
+
+  if (!result || result.error) {
+    carrierStatsLogTimeline.innerHTML = `<p class="placeholder-text alert-error" style="background: none;">Failed to load carrier stats logs.</p>`;
+    return;
+  }
+
+  const logs = result.data || [];
+  if (!Array.isArray(logs) || logs.length === 0) {
+    carrierStatsLogTimeline.innerHTML = `<p class="placeholder-text">No carrier stats logs recorded yet.</p>`;
+    return;
+  }
+
+  carrierStatsLogTimeline.innerHTML = logs.map((log) => {
+    const logDate = formatMaybeDate(log.created_at);
+    return `
+      <div class="timeline-item">
+        <div class="timeline-title">${log.endpoint || 'Unknown endpoint'}</div>
+        <div class="timeline-meta">${logDate}</div>
+        <div class="timeline-body" style="margin-top: 0.35rem;">Status ${log.status_code || 'N/A'} | ${log.duration_ms || 0} ms | ${log.response_size || 0} bytes</div>
+        <div class="timeline-meta" style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+          Success: <strong style="color: ${log.success ? 'var(--accent-emerald)' : 'var(--accent-danger)'}">${log.success ? 'yes' : 'no'}</strong>
+        </div>
+        ${log.error ? `<div class="timeline-body" style="color: var(--accent-danger); margin-top: 0.25rem;">${log.error}</div>` : ''}
+        ${log.response_preview ? `<div class="timeline-body" style="margin-top: 0.25rem; font-size: 0.72rem; opacity: 0.75;">${log.response_preview}</div>` : ''}
+      </div>
+    `;
+  }).join('');
 }
