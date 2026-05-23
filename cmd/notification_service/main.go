@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -52,6 +53,21 @@ func main() {
 	hdlr := notification.NewNotificationHandler(svc)
 	router := notification.ConfigureRouter(hdlr, logger)
 
+	// 2.5 Initialize and Start Kafka Consumer if configured
+	kafkaBrokersStr := os.Getenv("KAFKA_BROKERS")
+	var consumer *notification.KafkaConsumer
+	consumerCtx, consumerCancel := context.WithCancel(context.Background())
+	defer consumerCancel()
+
+	if kafkaBrokersStr != "" {
+		brokers := strings.Split(kafkaBrokersStr, ",")
+		logger.Info("Initializing Kafka Consumer for shipment-notifications", slog.Any("brokers", brokers))
+		consumer = notification.NewKafkaConsumer(brokers, "shipment-notifications", "customer-notification-group", svc)
+		if consumer != nil {
+			go consumer.Start(consumerCtx)
+		}
+	}
+
 	// 3. Configure Server
 	serverAddr := fmt.Sprintf(":%s", port)
 	server := &http.Server{
@@ -81,6 +97,14 @@ func main() {
 
 	case sig := <-shutdownSignal:
 		logger.Info("Shutdown signal received", slog.String("signal", sig.String()))
+
+		consumerCancel()
+		if consumer != nil {
+			logger.Info("Closing Kafka Consumer...")
+			if err := consumer.Close(); err != nil {
+				logger.Error("Failed to close Kafka Consumer", slog.Any("error", err))
+			}
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
