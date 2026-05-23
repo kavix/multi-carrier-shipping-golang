@@ -11,7 +11,7 @@ type NotificationLog struct {
 	Method    string    `json:"method"`    // "EMAIL" or "TELEGRAM"
 	Subject   string    `json:"subject"`
 	Body      string    `json:"body"`
-	Status    string    `json:"status"`    // "SENT", "FAILED"
+	Status    string    `json:"status"` // "SENT", "FAILED"
 	CreatedAt time.Time `json:"created_at"`
 }
 

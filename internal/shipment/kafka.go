@@ -30,7 +30,6 @@ func NewKafkaPublisher(brokers []string, topic string) *KafkaPublisher {
 			Topic:        topic,
 			Balancer:     &kafka.LeastBytes{},
 			WriteTimeout: 3 * time.Second,
-			DialTimeout:  3 * time.Second,
 		},
 	}
 }

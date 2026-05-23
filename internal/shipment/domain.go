@@ -14,7 +14,7 @@ type Shipment struct {
 	Weight         float64   `json:"weight"`
 	Origin         string    `json:"origin"`
 	Destination    string    `json:"destination"`
-	Status         string    `json:"status"` // "PENDING", "CREATED", "CANCELLED"
+	Status         string    `json:"status"`   // "PENDING", "CREATED", "CANCELLED"
 	Username       string    `json:"username"` // Owner of this shipment record
 	Email          string    `json:"email"`    // Recipient email for notifications
 	CreatedAt      time.Time `json:"created_at"`

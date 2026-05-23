@@ -24,7 +24,7 @@ type shipmentService struct {
 	notificationServiceURL string
 	kafkaPublisher         *KafkaPublisher
 	httpClient             *http.Client
-	
+
 	// Concurrent rate limiter tracking (5-second throttle per user)
 	mu          sync.Mutex
 	lastCreated map[string]time.Time
@@ -465,7 +465,7 @@ func (s *shipmentService) sendNotificationEmail(ctx context.Context, shipment *S
 	}
 
 	filename := filepath.Join(dir, fmt.Sprintf("shipment_%s.html", label.TrackingNumber))
-	
+
 	var bodyBuf bytes.Buffer
 	data := struct {
 		Shipment *Shipment
@@ -489,8 +489,8 @@ func (s *shipmentService) sendNotificationEmail(ctx context.Context, shipment *S
 	// 2. Transmit email via Decoupled Notification Microservice
 	subject := fmt.Sprintf("Shipment Dispatched & Label Generated - TRK# %s", label.TrackingNumber)
 	if err := s.sendRemoteNotification(ctx, "EMAIL", shipment.Email, subject, htmlContent); err != nil {
-		slog.Error("Failed to send remote email notification via microservice", 
-			slog.String("error", err.Error()), 
+		slog.Error("Failed to send remote email notification via microservice",
+			slog.String("error", err.Error()),
 			slog.String("recipient", shipment.Email),
 		)
 		// We return the error so that the user receives proper feedback if remote request fails
@@ -504,7 +504,7 @@ func (s *shipmentService) sendNotificationEmail(ctx context.Context, shipment *S
 	)
 
 	// 3. Dispatch simulated Telegram message via Decoupled Notification Microservice
-	telegramMsg := fmt.Sprintf("Shipment TRK# %s has been generated. Carrier: %s. Origin: %s. Destination: %s.", 
+	telegramMsg := fmt.Sprintf("Shipment TRK# %s has been generated. Carrier: %s. Origin: %s. Destination: %s.",
 		label.TrackingNumber, shipment.Carrier, shipment.Origin, shipment.Destination,
 	)
 	if err := s.sendRemoteNotification(ctx, "TELEGRAM", "+1 (555) 019-2834", "", telegramMsg); err != nil {
@@ -660,9 +660,9 @@ func (s *shipmentService) UpdateShipment(
 
 	// 6. Trigger automated email on status update
 	if statusChanged {
-		slog.Info("Shipment status updated. Sending alert...", 
-			slog.String("id", id), 
-			slog.String("old_status", oldStatus), 
+		slog.Info("Shipment status updated. Sending alert...",
+			slog.String("id", id),
+			slog.String("old_status", oldStatus),
 			slog.String("new_status", status),
 			slog.String("email", shipment.Email),
 		)
@@ -868,7 +868,7 @@ func (s *shipmentService) sendStatusEmail(ctx context.Context, shipment *Shipmen
 	}
 
 	filename := filepath.Join(dir, fmt.Sprintf("status_update_%s.html", shipment.TrackingNumber))
-	
+
 	var bodyBuf bytes.Buffer
 	data := struct {
 		Shipment  *Shipment

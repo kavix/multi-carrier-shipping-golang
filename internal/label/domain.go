@@ -30,11 +30,11 @@ type LocationDetail struct {
 
 // Sentinel errors representing domain-specific failures.
 var (
-	ErrLabelNotFound         = errors.New("label not found")
-	ErrLabelAlreadyCancelled = errors.New("label is already cancelled")
-	ErrCarrierRequired       = errors.New("carrier is required")
+	ErrLabelNotFound          = errors.New("label not found")
+	ErrLabelAlreadyCancelled  = errors.New("label is already cancelled")
+	ErrCarrierRequired        = errors.New("carrier is required")
 	ErrTrackingNumberRequired = errors.New("tracking number is required")
-	ErrInvalidWeight         = errors.New("shipment weight must be greater than zero")
+	ErrInvalidWeight          = errors.New("shipment weight must be greater than zero")
 )
 
 // LabelRepository defines DB access interface for Labels.

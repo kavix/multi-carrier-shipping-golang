@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"time"
@@ -63,7 +62,7 @@ func (c *KafkaConsumer) Start(ctx context.Context) {
 			continue
 		}
 
-		slog.Info("Kafka consumer received message event", 
+		slog.Info("Kafka consumer received message event",
 			slog.Int64("offset", m.Offset),
 			slog.String("key", string(m.Key)),
 		)

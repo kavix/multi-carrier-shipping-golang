@@ -2,11 +2,12 @@
 
 # Variables
 BUILD_DIR=./bin
+KAFKA_BROKERS?=localhost:9092
 
 all: fmt vet test build
 
 run-shipment:
-	@PORT=8081 LABEL_SERVICE_URL=http://localhost:8082 AUTH_SERVICE_URL=http://localhost:8083 go run ./cmd/shipment_service/main.go
+	@PORT=8081 LABEL_SERVICE_URL=http://localhost:8082 AUTH_SERVICE_URL=http://localhost:8083 KAFKA_BROKERS=$(KAFKA_BROKERS) go run ./cmd/shipment_service/main.go
 
 run-label:
 	@PORT=8082 SHIPMENT_SERVICE_URL=http://localhost:8081 AUTH_SERVICE_URL=http://localhost:8083 go run ./cmd/label_service/main.go
@@ -15,15 +16,15 @@ run-auth:
 	@PORT=8083 go run ./cmd/auth_service/main.go
 
 run-notification:
-	@PORT=8084 go run ./cmd/notification_service/main.go
+	@PORT=8084 KAFKA_BROKERS=$(KAFKA_BROKERS) go run ./cmd/notification_service/main.go
 
 run:
 	@echo "Starting Shipment, Label, Auth, and Customer Notification microservices..."
 	@(trap 'kill 0' SIGINT; \
 	PORT=8083 go run ./cmd/auth_service/main.go & \
 	PORT=8082 SHIPMENT_SERVICE_URL=http://localhost:8081 AUTH_SERVICE_URL=http://localhost:8083 go run ./cmd/label_service/main.go & \
-	PORT=8084 go run ./cmd/notification_service/main.go & \
-	PORT=8081 LABEL_SERVICE_URL=http://localhost:8082 AUTH_SERVICE_URL=http://localhost:8083 NOTIFICATION_SERVICE_URL=http://localhost:8084 go run ./cmd/shipment_service/main.go)
+	PORT=8084 KAFKA_BROKERS=$(KAFKA_BROKERS) go run ./cmd/notification_service/main.go & \
+	PORT=8081 LABEL_SERVICE_URL=http://localhost:8082 AUTH_SERVICE_URL=http://localhost:8083 NOTIFICATION_SERVICE_URL=http://localhost:8084 KAFKA_BROKERS=$(KAFKA_BROKERS) go run ./cmd/shipment_service/main.go)
 
 build:
 	@mkdir -p $(BUILD_DIR)
