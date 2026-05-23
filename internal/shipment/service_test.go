@@ -6,17 +6,103 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestCreateShipment(t *testing.T) {
-	dbFile := "test_shipments.db"
-	defer os.Remove(dbFile)
+type mockShipmentRepository struct {
+	mu        sync.RWMutex
+	shipments map[string]*Shipment
+}
 
+func newMockShipmentRepository() *mockShipmentRepository {
+	return &mockShipmentRepository{
+		shipments: make(map[string]*Shipment),
+	}
+}
+
+func (m *mockShipmentRepository) Create(ctx context.Context, s *Shipment) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.shipments[s.ID]; exists {
+		return ErrShipmentAlreadyExists
+	}
+	// Check for unique tracking number
+	for _, existing := range m.shipments {
+		if existing.TrackingNumber == s.TrackingNumber {
+			return ErrShipmentAlreadyExists
+		}
+	}
+	m.shipments[s.ID] = s
+	return nil
+}
+
+func (m *mockShipmentRepository) GetByID(ctx context.Context, id string) (*Shipment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, exists := m.shipments[id]
+	if !exists {
+		return nil, ErrShipmentNotFound
+	}
+	return s, nil
+}
+
+func (m *mockShipmentRepository) GetByTracking(ctx context.Context, trackingNum string) (*Shipment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, s := range m.shipments {
+		if s.TrackingNumber == trackingNum {
+			return s, nil
+		}
+	}
+	return nil, ErrShipmentNotFound
+}
+
+func (m *mockShipmentRepository) List(ctx context.Context) ([]*Shipment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var list []*Shipment
+	for _, s := range m.shipments {
+		list = append(list, s)
+	}
+	return list, nil
+}
+
+func (m *mockShipmentRepository) ListByUsername(ctx context.Context, username string) ([]*Shipment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var list []*Shipment
+	for _, s := range m.shipments {
+		if s.Username == username {
+			list = append(list, s)
+		}
+	}
+	return list, nil
+}
+
+func (m *mockShipmentRepository) Update(ctx context.Context, s *Shipment) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.shipments[s.ID]; !exists {
+		return ErrShipmentNotFound
+	}
+	m.shipments[s.ID] = s
+	return nil
+}
+
+func (m *mockShipmentRepository) Delete(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.shipments[id]; !exists {
+		return ErrShipmentNotFound
+	}
+	delete(m.shipments, id)
+	return nil
+}
+
+func TestCreateShipment(t *testing.T) {
 	// 1. Mock Auth Server
 	mockAuthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -73,12 +159,7 @@ func TestCreateShipment(t *testing.T) {
 	}))
 	defer mockNotificationServer.Close()
 
-	repo, err := NewSQLiteShipmentRepository(dbFile)
-	if err != nil {
-		t.Fatalf("failed to open test sqlite db: %v", err)
-	}
-	defer repo.Close()
-
+	repo := newMockShipmentRepository()
 	svc := NewShipmentService(repo, mockLabelServer.URL, mockAuthServer.URL, mockNotificationServer.URL, nil)
 	svcImpl := svc.(*shipmentService)
 	svcImpl.rateLimit = 0 // Disable rate limiting for standard sequential tests

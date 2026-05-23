@@ -4,31 +4,30 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
-type SQLiteNotificationRepository struct {
+type PostgresNotificationRepository struct {
 	db *sql.DB
 }
 
-// NewSQLiteNotificationRepository instantiates a new SQLite database connection for Notifications.
-func NewSQLiteNotificationRepository(dbPath string) (*SQLiteNotificationRepository, error) {
-	db, err := sql.Open("sqlite", dbPath)
+// NewPostgresNotificationRepository instantiates a new PostgreSQL database connection for Notifications.
+func NewPostgresNotificationRepository(dsn string) (*PostgresNotificationRepository, error) {
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open sqlite db: %w", err)
+		return nil, fmt.Errorf("failed to open postgres db: %w", err)
 	}
 
 	schema := `
 	CREATE TABLE IF NOT EXISTS notification_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id SERIAL PRIMARY KEY,
 		recipient TEXT NOT NULL,
 		method TEXT NOT NULL,
 		subject TEXT NOT NULL,
 		body TEXT NOT NULL,
 		status TEXT NOT NULL,
-		created_at INTEGER NOT NULL
+		created_at TIMESTAMP NOT NULL
 	);`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -36,24 +35,19 @@ func NewSQLiteNotificationRepository(dbPath string) (*SQLiteNotificationReposito
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	return &SQLiteNotificationRepository{db: db}, nil
+	return &PostgresNotificationRepository{db: db}, nil
 }
 
-func (r *SQLiteNotificationRepository) Create(ctx context.Context, log *NotificationLog) error {
-	query := `INSERT INTO notification_logs (recipient, method, subject, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-	res, err := r.db.ExecContext(ctx, query, log.Recipient, log.Method, log.Subject, log.Body, log.Status, log.CreatedAt.Unix())
+func (r *PostgresNotificationRepository) Create(ctx context.Context, log *NotificationLog) error {
+	query := `INSERT INTO notification_logs (recipient, method, subject, body, status, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+	err := r.db.QueryRowContext(ctx, query, log.Recipient, log.Method, log.Subject, log.Body, log.Status, log.CreatedAt).Scan(&log.ID)
 	if err != nil {
 		return fmt.Errorf("failed to insert notification log: %w", err)
-	}
-
-	id, err := res.LastInsertId()
-	if err == nil {
-		log.ID = id
 	}
 	return nil
 }
 
-func (r *SQLiteNotificationRepository) List(ctx context.Context) ([]*NotificationLog, error) {
+func (r *PostgresNotificationRepository) List(ctx context.Context) ([]*NotificationLog, error) {
 	query := `SELECT id, recipient, method, subject, body, status, created_at FROM notification_logs ORDER BY id DESC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -64,16 +58,14 @@ func (r *SQLiteNotificationRepository) List(ctx context.Context) ([]*Notificatio
 	var logs []*NotificationLog
 	for rows.Next() {
 		var l NotificationLog
-		var createdUnix int64
-		if err := rows.Scan(&l.ID, &l.Recipient, &l.Method, &l.Subject, &l.Body, &l.Status, &createdUnix); err != nil {
+		if err := rows.Scan(&l.ID, &l.Recipient, &l.Method, &l.Subject, &l.Body, &l.Status, &l.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan notification log: %w", err)
 		}
-		l.CreatedAt = time.Unix(createdUnix, 0)
 		logs = append(logs, &l)
 	}
 	return logs, nil
 }
 
-func (r *SQLiteNotificationRepository) Close() error {
+func (r *PostgresNotificationRepository) Close() error {
 	return r.db.Close()
 }

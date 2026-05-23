@@ -1,5 +1,5 @@
 # Step 1: Build the binary
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install system dependencies (e.g., git/certificates if needed)
 RUN apk --no-cache add ca-certificates git
@@ -13,8 +13,8 @@ COPY go.mod ./
 # Copy source code
 COPY . .
 
-# Build standard statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o server ./cmd/server/main.go
+ARG SERVICE_NAME
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o server ./cmd/${SERVICE_NAME}/main.go
 
 # Step 2: Create execution container
 FROM alpine:3.19

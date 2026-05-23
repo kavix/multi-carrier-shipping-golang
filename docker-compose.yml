@@ -1,20 +1,111 @@
 services:
-  app:
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_AUTH_URL=http://localhost:8083
+      - NEXT_PUBLIC_SHIPMENT_URL=http://localhost:8081
+      - NEXT_PUBLIC_LABEL_URL=http://localhost:8082
+      - NEXT_PUBLIC_NOTIFICATION_URL=http://localhost:8084
+      - NEXT_PUBLIC_CARRIER_STATS_URL=http://localhost:8085
+    depends_on:
+      - auth_service
+      - shipment_service
+      - label_service
+      - notification_service
+      - carrier_stats_service
+
+  auth_service:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: auth_service
     ports:
-      - "8080:8080"
+      - "8083:8080"
     environment:
-      - APP_PORT=8080
+      - PORT=8080
       - APP_ENV=development
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=shipping_user
       - DB_PASSWORD=shipping_pass
-      - DB_NAME=shipping_db
-      - DB_SSLMODE=disable
+      - DB_NAME=auth_db
     depends_on:
+      postgres:
+        condition: service_healthy
+
+  label_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: label_service
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - APP_ENV=development
+      - SHIPMENT_SERVICE_URL=http://shipment_service:8080
+      - AUTH_SERVICE_URL=http://auth_service:8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=shipping_user
+      - DB_PASSWORD=shipping_pass
+      - DB_NAME=label_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  shipment_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: shipment_service
+    ports:
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - APP_ENV=development
+      - LABEL_SERVICE_URL=http://label_service:8080
+      - AUTH_SERVICE_URL=http://auth_service:8080
+      - NOTIFICATION_SERVICE_URL=http://notification_service:8080
+      - KAFKA_BROKERS=kafka:29092
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=shipping_user
+      - DB_PASSWORD=shipping_pass
+      - DB_NAME=shipment_db
+    depends_on:
+      kafka:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  notification_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: notification_service
+    ports:
+      - "8084:8080"
+    environment:
+      - PORT=8080
+      - APP_ENV=development
+      - KAFKA_BROKERS=kafka:29092
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=shipping_user
+      - DB_PASSWORD=shipping_pass
+      - DB_NAME=notification_db
+    depends_on:
+      kafka:
+        condition: service_started
       postgres:
         condition: service_healthy
 
@@ -45,6 +136,7 @@ services:
       - POSTGRES_DB=shipping_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U shipping_user -d shipping_db"]
       interval: 5s

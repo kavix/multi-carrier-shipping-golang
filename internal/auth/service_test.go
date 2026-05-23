@@ -3,20 +3,68 @@ package auth
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 )
 
-func TestAuthService(t *testing.T) {
-	dbFile := "test_auth.db"
-	defer os.Remove(dbFile)
+type mockAuthRepository struct {
+	users     map[string]*User
+	sessions  map[string]*Session
+	auditLogs map[string][]*AuditLog
+}
 
-	repo, err := NewSQLiteAuthRepository(dbFile)
-	if err != nil {
-		t.Fatalf("failed to initialize test repository: %v", err)
+func newMockAuthRepository() *mockAuthRepository {
+	return &mockAuthRepository{
+		users:     make(map[string]*User),
+		sessions:  make(map[string]*Session),
+		auditLogs: make(map[string][]*AuditLog),
 	}
-	defer repo.Close()
+}
 
+func (m *mockAuthRepository) CreateUser(ctx context.Context, user *User) error {
+	if _, exists := m.users[user.Username]; exists {
+		return ErrUserAlreadyExists
+	}
+	m.users[user.Username] = user
+	return nil
+}
+
+func (m *mockAuthRepository) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	u, exists := m.users[username]
+	if !exists {
+		return nil, ErrInvalidCredentials
+	}
+	return u, nil
+}
+
+func (m *mockAuthRepository) CreateSession(ctx context.Context, session *Session) error {
+	m.sessions[session.Token] = session
+	return nil
+}
+
+func (m *mockAuthRepository) GetSession(ctx context.Context, token string) (*Session, error) {
+	s, exists := m.sessions[token]
+	if !exists {
+		return nil, ErrSessionNotFound
+	}
+	return s, nil
+}
+
+func (m *mockAuthRepository) DeleteSession(ctx context.Context, token string) error {
+	delete(m.sessions, token)
+	return nil
+}
+
+func (m *mockAuthRepository) CreateAuditLog(ctx context.Context, log *AuditLog) error {
+	m.auditLogs[log.Username] = append(m.auditLogs[log.Username], log)
+	return nil
+}
+
+func (m *mockAuthRepository) GetAuditLogs(ctx context.Context, username string) ([]*AuditLog, error) {
+	return m.auditLogs[username], nil
+}
+
+func TestAuthService(t *testing.T) {
+	repo := newMockAuthRepository()
 	svc := NewAuthService(repo)
 	ctx := context.Background()
 

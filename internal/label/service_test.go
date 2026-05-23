@@ -3,20 +3,62 @@ package label
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 )
 
-func TestCreateLabel(t *testing.T) {
-	dbFile := "test_labels.db"
-	defer os.Remove(dbFile)
+type mockLabelRepository struct {
+	labels map[string]*Label
+}
 
-	repo, err := NewSQLiteLabelRepository(dbFile)
-	if err != nil {
-		t.Fatalf("failed to open test sqlite db: %v", err)
+func newMockLabelRepository() *mockLabelRepository {
+	return &mockLabelRepository{
+		labels: make(map[string]*Label),
 	}
-	defer repo.Close()
+}
 
+func (m *mockLabelRepository) Create(ctx context.Context, l *Label) error {
+	if _, exists := m.labels[l.ID]; exists {
+		return ErrLabelAlreadyCancelled // or duplicate error
+	}
+	m.labels[l.ID] = l
+	return nil
+}
+
+func (m *mockLabelRepository) GetByID(ctx context.Context, id string) (*Label, error) {
+	l, exists := m.labels[id]
+	if !exists {
+		return nil, ErrLabelNotFound
+	}
+	return l, nil
+}
+
+func (m *mockLabelRepository) GetByTracking(ctx context.Context, trackingNum string) (*Label, error) {
+	for _, l := range m.labels {
+		if l.TrackingNumber == trackingNum {
+			return l, nil
+		}
+	}
+	return nil, ErrLabelNotFound
+}
+
+func (m *mockLabelRepository) Update(ctx context.Context, l *Label) error {
+	if _, exists := m.labels[l.ID]; !exists {
+		return ErrLabelNotFound
+	}
+	m.labels[l.ID] = l
+	return nil
+}
+
+func (m *mockLabelRepository) Delete(ctx context.Context, id string) error {
+	if _, exists := m.labels[id]; !exists {
+		return ErrLabelNotFound
+	}
+	delete(m.labels, id)
+	return nil
+}
+
+func TestCreateLabel(t *testing.T) {
+	repo := newMockLabelRepository()
 	svc := NewLabelService(repo, nil, "", "")
 	ctx := context.Background()
 

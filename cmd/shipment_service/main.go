@@ -40,10 +40,19 @@ func main() {
 		notificationServiceURL = "http://localhost:8084"
 	}
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "shipments.db"
-	}
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPass := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	if dbHost == "" { dbHost = "localhost" }
+	if dbPort == "" { dbPort = "5432" }
+	if dbUser == "" { dbUser = "shipping_user" }
+	if dbPass == "" { dbPass = "shipping_pass" }
+	if dbName == "" { dbName = "shipment_db" }
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPass, dbName)
 
 	var logger *slog.Logger
 	if cfg.Env == "production" {
@@ -55,10 +64,10 @@ func main() {
 
 	logger.Info("Starting Shipment Microservice", slog.String("env", cfg.Env), slog.String("port", port))
 
-	// 1. Initialize SQLite Database
-	repo, err := shipment.NewSQLiteShipmentRepository(dbPath)
+	// 1. Initialize Postgres Database
+	repo, err := shipment.NewPostgresShipmentRepository(dsn)
 	if err != nil {
-		logger.Error("Failed to initialize sqlite repository", slog.Any("error", err))
+		logger.Error("Failed to initialize postgres repository", slog.Any("error", err))
 		os.Exit(1)
 	}
 	defer repo.Close()

@@ -5,20 +5,19 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
-type SQLiteShipmentRepository struct {
+type PostgresShipmentRepository struct {
 	db *sql.DB
 }
 
-// NewSQLiteShipmentRepository instantiates a new SQLite database connection.
-func NewSQLiteShipmentRepository(dbPath string) (*SQLiteShipmentRepository, error) {
-	db, err := sql.Open("sqlite", dbPath)
+// NewPostgresShipmentRepository instantiates a new PostgreSQL database connection.
+func NewPostgresShipmentRepository(dsn string) (*PostgresShipmentRepository, error) {
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open sqlite db: %w", err)
+		return nil, fmt.Errorf("failed to open postgres db: %w", err)
 	}
 
 	// Schema now includes username and email columns
@@ -33,8 +32,8 @@ func NewSQLiteShipmentRepository(dbPath string) (*SQLiteShipmentRepository, erro
 		status TEXT NOT NULL,
 		username TEXT NOT NULL,
 		email TEXT NOT NULL DEFAULT '',
-		created_at INTEGER NOT NULL,
-		updated_at INTEGER NOT NULL
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
 	);`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -42,20 +41,16 @@ func NewSQLiteShipmentRepository(dbPath string) (*SQLiteShipmentRepository, erro
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	// Dynamic upgrade: Ensure 'username' and 'email' columns exist for backward compatibility with legacy DBs.
-	// We ignore the errors if they already exist.
-	_, _ = db.Exec("ALTER TABLE shipments ADD COLUMN username TEXT NOT NULL DEFAULT ''")
-	_, _ = db.Exec("ALTER TABLE shipments ADD COLUMN email TEXT NOT NULL DEFAULT ''")
-
-	return &SQLiteShipmentRepository{db: db}, nil
+	return &PostgresShipmentRepository{db: db}, nil
 }
 
-func (r *SQLiteShipmentRepository) Create(ctx context.Context, s *Shipment) error {
+func (r *PostgresShipmentRepository) Create(ctx context.Context, s *Shipment) error {
 	query := `INSERT INTO shipments (id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := r.db.ExecContext(ctx, query, s.ID, s.Carrier, s.TrackingNumber, s.Weight, s.Origin, s.Destination, s.Status, s.Username, s.Email, s.CreatedAt.Unix(), s.UpdatedAt.Unix())
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	_, err := r.db.ExecContext(ctx, query, s.ID, s.Carrier, s.TrackingNumber, s.Weight, s.Origin, s.Destination, s.Status, s.Username, s.Email, s.CreatedAt, s.UpdatedAt)
 	if err != nil {
-		if strings.Contains(err.Error(), "constraint failed") || strings.Contains(err.Error(), "UNIQUE") {
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "unique") || strings.Contains(errStr, "duplicate") {
 			return ErrShipmentAlreadyExists
 		}
 		return fmt.Errorf("failed to create shipment: %w", err)
@@ -63,43 +58,37 @@ func (r *SQLiteShipmentRepository) Create(ctx context.Context, s *Shipment) erro
 	return nil
 }
 
-func (r *SQLiteShipmentRepository) GetByID(ctx context.Context, id string) (*Shipment, error) {
-	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments WHERE id = ?`
+func (r *PostgresShipmentRepository) GetByID(ctx context.Context, id string) (*Shipment, error) {
+	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments WHERE id = $1`
 	row := r.db.QueryRowContext(ctx, query, id)
 
 	var s Shipment
-	var createdUnix, updatedUnix int64
-	err := row.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &createdUnix, &updatedUnix)
+	err := row.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &s.CreatedAt, &s.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrShipmentNotFound
 	} else if err != nil {
 		return nil, err
 	}
 
-	s.CreatedAt = time.Unix(createdUnix, 0)
-	s.UpdatedAt = time.Unix(updatedUnix, 0)
 	return &s, nil
 }
 
-func (r *SQLiteShipmentRepository) GetByTracking(ctx context.Context, trackingNum string) (*Shipment, error) {
-	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments WHERE tracking_number = ?`
+func (r *PostgresShipmentRepository) GetByTracking(ctx context.Context, trackingNum string) (*Shipment, error) {
+	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments WHERE tracking_number = $1`
 	row := r.db.QueryRowContext(ctx, query, trackingNum)
 
 	var s Shipment
-	var createdUnix, updatedUnix int64
-	err := row.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &createdUnix, &updatedUnix)
+	err := row.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &s.CreatedAt, &s.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrShipmentNotFound
 	} else if err != nil {
 		return nil, err
 	}
 
-	s.CreatedAt = time.Unix(createdUnix, 0)
-	s.UpdatedAt = time.Unix(updatedUnix, 0)
 	return &s, nil
 }
 
-func (r *SQLiteShipmentRepository) List(ctx context.Context) ([]*Shipment, error) {
+func (r *PostgresShipmentRepository) List(ctx context.Context) ([]*Shipment, error) {
 	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -110,20 +99,17 @@ func (r *SQLiteShipmentRepository) List(ctx context.Context) ([]*Shipment, error
 	var list []*Shipment
 	for rows.Next() {
 		var s Shipment
-		var createdUnix, updatedUnix int64
-		if err := rows.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &createdUnix, &updatedUnix); err != nil {
+		if err := rows.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
-		s.CreatedAt = time.Unix(createdUnix, 0)
-		s.UpdatedAt = time.Unix(updatedUnix, 0)
 		list = append(list, &s)
 	}
 
 	return list, nil
 }
 
-func (r *SQLiteShipmentRepository) ListByUsername(ctx context.Context, username string) ([]*Shipment, error) {
-	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments WHERE username = ?`
+func (r *PostgresShipmentRepository) ListByUsername(ctx context.Context, username string) ([]*Shipment, error) {
+	query := `SELECT id, carrier, tracking_number, weight, origin, destination, status, username, email, created_at, updated_at FROM shipments WHERE username = $1`
 	rows, err := r.db.QueryContext(ctx, query, username)
 	if err != nil {
 		return nil, err
@@ -133,30 +119,27 @@ func (r *SQLiteShipmentRepository) ListByUsername(ctx context.Context, username 
 	var list []*Shipment
 	for rows.Next() {
 		var s Shipment
-		var createdUnix, updatedUnix int64
-		if err := rows.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &createdUnix, &updatedUnix); err != nil {
+		if err := rows.Scan(&s.ID, &s.Carrier, &s.TrackingNumber, &s.Weight, &s.Origin, &s.Destination, &s.Status, &s.Username, &s.Email, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
-		s.CreatedAt = time.Unix(createdUnix, 0)
-		s.UpdatedAt = time.Unix(updatedUnix, 0)
 		list = append(list, &s)
 	}
 
 	return list, nil
 }
 
-func (r *SQLiteShipmentRepository) Update(ctx context.Context, s *Shipment) error {
-	query := `UPDATE shipments SET carrier = ?, tracking_number = ?, weight = ?, origin = ?, destination = ?, status = ?, username = ?, email = ?, updated_at = ? WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, s.Carrier, s.TrackingNumber, s.Weight, s.Origin, s.Destination, s.Status, s.Username, s.Email, s.UpdatedAt.Unix(), s.ID)
+func (r *PostgresShipmentRepository) Update(ctx context.Context, s *Shipment) error {
+	query := `UPDATE shipments SET carrier = $1, tracking_number = $2, weight = $3, origin = $4, destination = $5, status = $6, username = $7, email = $8, updated_at = $9 WHERE id = $10`
+	_, err := r.db.ExecContext(ctx, query, s.Carrier, s.TrackingNumber, s.Weight, s.Origin, s.Destination, s.Status, s.Username, s.Email, s.UpdatedAt, s.ID)
 	return err
 }
 
-func (r *SQLiteShipmentRepository) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM shipments WHERE id = ?`
+func (r *PostgresShipmentRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM shipments WHERE id = $1`
 	_, err := r.db.ExecContext(ctx, query, id)
 	return err
 }
 
-func (r *SQLiteShipmentRepository) Close() error {
+func (r *PostgresShipmentRepository) Close() error {
 	return r.db.Close()
 }

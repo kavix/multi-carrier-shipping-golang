@@ -2,20 +2,44 @@ package notification
 
 import (
 	"context"
-	"os"
 	"testing"
 )
 
-func TestNotificationService(t *testing.T) {
-	dbFile := "test_notifications.db"
-	defer os.Remove(dbFile)
+type mockNotificationRepository struct {
+	logs   []*NotificationLog
+	nextID int64
+}
 
-	repo, err := NewSQLiteNotificationRepository(dbFile)
-	if err != nil {
-		t.Fatalf("failed to open test sqlite db: %v", err)
+func newMockNotificationRepository() *mockNotificationRepository {
+	return &mockNotificationRepository{
+		logs:   make([]*NotificationLog, 0),
+		nextID: 1,
 	}
-	defer repo.Close()
+}
 
+func (m *mockNotificationRepository) Create(ctx context.Context, log *NotificationLog) error {
+	log.ID = m.nextID
+	m.nextID++
+	m.logs = append(m.logs, log)
+	return nil
+}
+
+func (m *mockNotificationRepository) List(ctx context.Context) ([]*NotificationLog, error) {
+	// Return in reverse order (newest first) to mimic ORDER BY id DESC
+	n := len(m.logs)
+	reversed := make([]*NotificationLog, n)
+	for i, l := range m.logs {
+		reversed[n-1-i] = l
+	}
+	return reversed, nil
+}
+
+func (m *mockNotificationRepository) Close() error {
+	return nil
+}
+
+func TestNotificationService(t *testing.T) {
+	repo := newMockNotificationRepository()
 	svc := NewNotificationService(repo)
 	ctx := context.Background()
 
@@ -73,7 +97,7 @@ func TestNotificationService(t *testing.T) {
 			t.Errorf("expected 2 notification logs in database, got %d", len(logs))
 		}
 
-		// Ordered by created_at DESC, so the second one (TELEGRAM) is first
+		// Ordered by created_at DESC / ID DESC, so the second one (TELEGRAM) is first
 		if logs[0].Method != "TELEGRAM" {
 			t.Errorf("expected first log to be 'TELEGRAM', got '%s'", logs[0].Method)
 		}
