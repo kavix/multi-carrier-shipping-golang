@@ -79,7 +79,7 @@ func TestCreateShipment(t *testing.T) {
 	}
 	defer repo.Close()
 
-	svc := NewShipmentService(repo, mockLabelServer.URL, mockAuthServer.URL, mockNotificationServer.URL)
+	svc := NewShipmentService(repo, mockLabelServer.URL, mockAuthServer.URL, mockNotificationServer.URL, nil)
 	svcImpl := svc.(*shipmentService)
 	svcImpl.rateLimit = 0 // Disable rate limiting for standard sequential tests
 	ctx := context.Background()

@@ -22,6 +22,7 @@ type shipmentService struct {
 	labelServiceURL        string
 	authServiceURL         string
 	notificationServiceURL string
+	kafkaPublisher         *KafkaPublisher
 	httpClient             *http.Client
 	
 	// Concurrent rate limiter tracking (5-second throttle per user)
@@ -31,12 +32,18 @@ type shipmentService struct {
 }
 
 // NewShipmentService instantiates a new ShipmentService implementation.
-func NewShipmentService(repo ShipmentRepository, labelServiceURL string, authServiceURL string, notificationServiceURL string) ShipmentService {
+func NewShipmentService(repo ShipmentRepository, labelServiceURL string, authServiceURL string, notificationServiceURL string, kafkaBrokers []string) ShipmentService {
+	var publisher *KafkaPublisher
+	if len(kafkaBrokers) > 0 {
+		slog.Info("Initializing Kafka Publisher for shipment-notifications", slog.Any("brokers", kafkaBrokers))
+		publisher = NewKafkaPublisher(kafkaBrokers, "shipment-notifications")
+	}
 	return &shipmentService{
 		repo:                   repo,
 		labelServiceURL:        strings.TrimSuffix(labelServiceURL, "/"),
 		authServiceURL:         strings.TrimSuffix(authServiceURL, "/"),
 		notificationServiceURL: strings.TrimSuffix(notificationServiceURL, "/"),
+		kafkaPublisher:         publisher,
 		httpClient:             &http.Client{Timeout: 10 * time.Second},
 		lastCreated:            make(map[string]time.Time),
 		rateLimit:              5 * time.Second, // Default to 5s production limit
@@ -514,6 +521,24 @@ func (s *shipmentService) sendNotificationEmail(ctx context.Context, shipment *S
 }
 
 func (s *shipmentService) sendRemoteNotification(ctx context.Context, method, recipient, subject, body string) error {
+	// 1. Attempt to dispatch asynchronously via Apache Kafka
+	if s.kafkaPublisher != nil {
+		err := s.kafkaPublisher.PublishNotification(ctx, method, recipient, subject, body)
+		if err == nil {
+			slog.Info("Successfully published asynchronous event to Kafka broker topic",
+				slog.String("method", method),
+				slog.String("recipient", recipient),
+			)
+			return nil
+		}
+		slog.Warn("Kafka event dispatch failed; gracefully falling back to synchronous REST fallback",
+			slog.String("error", err.Error()),
+			slog.String("method", method),
+			slog.String("recipient", recipient),
+		)
+	}
+
+	// 2. Fallback to direct synchronous REST trigger
 	payload := map[string]string{
 		"recipient": recipient,
 		"method":    method,

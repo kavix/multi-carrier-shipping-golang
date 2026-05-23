@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,7 +64,13 @@ func main() {
 	defer repo.Close()
 
 	// 2. Initialize Service & Handlers
-	svc := shipment.NewShipmentService(repo, labelServiceURL, authServiceURL, notificationServiceURL)
+	kafkaBrokersStr := os.Getenv("KAFKA_BROKERS")
+	var kafkaBrokers []string
+	if kafkaBrokersStr != "" {
+		kafkaBrokers = strings.Split(kafkaBrokersStr, ",")
+	}
+
+	svc := shipment.NewShipmentService(repo, labelServiceURL, authServiceURL, notificationServiceURL, kafkaBrokers)
 	hdlr := shipment.NewShipmentHandler(svc)
 	router := shipment.ConfigureRouter(hdlr, logger)
 
