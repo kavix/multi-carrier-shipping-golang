@@ -139,43 +139,44 @@ func (s *labelService) CreateLabel(
 		Carrier: strings.ToUpper(carrier),
 	}
 
-	// Only enrich with FedEx-specific data when FedEx is the carrier
-	if strings.EqualFold(carrier, "fedex") && s.carrierSvc != nil {
-		// Try to get a *FedExClient from the carrier service (MultiCarrierClient or direct)
-		var fedex *FedExClient
-		switch v := s.carrierSvc.(type) {
-		case *FedExClient:
-			fedex = v
-		case *MultiCarrierClient:
-			fedex = v.fedex
-		}
+	if s.carrierSvc != nil {
+		if strings.EqualFold(carrier, "fedex") {
+			// Try to get a *FedExClient from the carrier service (MultiCarrierClient or direct)
+			var fedex *FedExClient
+			switch v := s.carrierSvc.(type) {
+			case *FedExClient:
+				fedex = v
+			case *MultiCarrierClient:
+				fedex = v.fedex
+			}
 
-		if fedex != nil {
-			_, _, originPostal, originCountry := ParseAddress(origin)
-			_, _, destPostal, destCountry := ParseAddress(destination)
+			if fedex != nil {
+				_, _, originPostal, originCountry := ParseAddress(origin)
+				_, _, destPostal, destCountry := ParseAddress(destination)
 
-			// 3a. Postal validation — best-effort
-			if originPostal != "" {
-				if pInfo, pErr := fedex.ValidatePostalCode(ctx, originPostal, "", originCountry); pErr == nil {
-					resp.OriginPostal = pInfo
+				// 3a. Postal validation — best-effort
+				if originPostal != "" {
+					if pInfo, pErr := fedex.ValidatePostalCode(ctx, originPostal, "", originCountry); pErr == nil {
+						resp.OriginPostal = pInfo
+					}
+				}
+				if destPostal != "" {
+					if pInfo, pErr := fedex.ValidatePostalCode(ctx, destPostal, "", destCountry); pErr == nil {
+						resp.DestinationPostal = pInfo
+					}
+				}
+
+				// 3b. Rate quotes — best-effort
+				if quotes, quoteDate, rErr := fedex.GetRatesAndTransitTimes(
+					ctx, weight, originPostal, originCountry, destPostal, destCountry,
+				); rErr == nil {
+					resp.RateQuotes = quotes
+					resp.QuoteDate = quoteDate
 				}
 			}
-			if destPostal != "" {
-				if pInfo, pErr := fedex.ValidatePostalCode(ctx, destPostal, "", destCountry); pErr == nil {
-					resp.DestinationPostal = pInfo
-				}
-			}
-
-			// 3b. Rate quotes — best-effort
-			if quotes, quoteDate, rErr := fedex.GetRatesAndTransitTimes(
-				ctx, weight, originPostal, originCountry, destPostal, destCountry,
-			); rErr == nil {
-				resp.RateQuotes = quotes
-				resp.QuoteDate = quoteDate
-			}
 		}
 
-		// 3c. Drop-off locations — best-effort
+		// 3c. Drop-off locations — best-effort for all supported carriers
 		if originLocs, lErr := s.carrierSvc.SearchLocations(ctx, carrier, origin); lErr == nil {
 			resp.OriginDropOffLocations = originLocs
 		}
@@ -183,8 +184,9 @@ func (s *labelService) CreateLabel(
 			resp.DestinationDropOffLocations = destLocs
 		}
 
-		// Print structured summary to server logs
-		s.printFedExSummary(resp)
+		if strings.EqualFold(carrier, "fedex") {
+			s.printFedExSummary(resp)
+		}
 	}
 
 	return resp, nil
@@ -219,8 +221,6 @@ func (s *labelService) printFedExSummary(resp *LabelCreateResponse) {
 	printLocations("Destination", "destination", resp.DestinationDropOffLocations)
 	fmt.Printf("══════════════════════════════════════════════════════════════\n\n")
 }
-
-
 
 func printLocations(locType, addressStr string, locs []LocationDetail) {
 	if len(locs) == 0 {
@@ -279,7 +279,6 @@ func printLocations(locType, addressStr string, locs []LocationDetail) {
 		}
 	}
 }
-
 
 func (s *labelService) GetLabelByTracking(ctx context.Context, trackingNumber string) (*Label, error) {
 	if trackingNumber == "" {

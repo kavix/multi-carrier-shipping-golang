@@ -205,9 +205,13 @@ func (s *shipmentService) CreateShipment(
 	}
 
 	var label Label
-	if err := json.NewDecoder(resp.Body).Decode(&label); err != nil {
+	var labelResponse struct {
+		Label Label `json:"label"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&labelResponse); err != nil {
 		return nil, nil, fmt.Errorf("failed to decode label details: %w", err)
 	}
+	label = labelResponse.Label
 
 	// 5. Update Shipment to CREATED
 	shipment.TrackingNumber = label.TrackingNumber
