@@ -1,186 +1,67 @@
 services:
+  order-service:
+    build:
+      context: ./backend
+    image: multi-carrier-shipping-golang-order
+    command: ["/usr/local/bin/order-service"]
+    ports:
+      - "8081:8081"
+
+  carrier-service:
+    build:
+      context: ./backend
+    image: multi-carrier-shipping-golang-carrier
+    command: ["/usr/local/bin/carrier-service"]
+    ports:
+      - "8082:8082"
+
+  tracking-service:
+    build:
+      context: ./backend
+    image: multi-carrier-shipping-golang-tracking
+    command: ["/usr/local/bin/tracking-service"]
+    ports:
+      - "8083:8083"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: shipuser
+      POSTGRES_PASSWORD: shippass
+      POSTGRES_DB: shipping
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api-gateway:
+    build:
+      context: ./backend
+    image: multi-carrier-shipping-golang-gateway
+    command: ["/usr/local/bin/api-gateway"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - order-service
+      - carrier-service
+      - tracking-service
+      - db
+
   frontend:
     build:
-      context: frontend
-      dockerfile: Dockerfile
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    image: multi-carrier-shipping-golang-frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_AUTH_URL=http://localhost:8083
-      - NEXT_PUBLIC_SHIPMENT_URL=http://localhost:8081
-      - NEXT_PUBLIC_LABEL_URL=http://localhost:8082
-      - NEXT_PUBLIC_NOTIFICATION_URL=http://localhost:8084
-      - NEXT_PUBLIC_CARRIER_STATS_URL=http://localhost:8085
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
     depends_on:
-      - auth_service
-      - shipment_service
-      - label_service
-      - notification_service
-      - carrier_stats_service
-
-  auth_service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: auth_service
-    ports:
-      - "8083:8080"
-    environment:
-      - PORT=8080
-      - APP_ENV=development
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=shipping_user
-      - DB_PASSWORD=shipping_pass
-      - DB_NAME=auth_db
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  label_service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: label_service
-    ports:
-      - "8082:8080"
-    environment:
-      - PORT=8080
-      - APP_ENV=development
-      - SHIPMENT_SERVICE_URL=http://shipment_service:8080
-      - AUTH_SERVICE_URL=http://auth_service:8080
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=shipping_user
-      - DB_PASSWORD=shipping_pass
-      - DB_NAME=label_db
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  shipment_service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: shipment_service
-    ports:
-      - "8081:8080"
-    environment:
-      - PORT=8080
-      - APP_ENV=development
-      - LABEL_SERVICE_URL=http://label_service:8080
-      - AUTH_SERVICE_URL=http://auth_service:8080
-      - NOTIFICATION_SERVICE_URL=http://notification_service:8080
-      - KAFKA_BROKERS=kafka:29092
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=shipping_user
-      - DB_PASSWORD=shipping_pass
-      - DB_NAME=shipment_db
-    depends_on:
-      kafka:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-
-  notification_service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: notification_service
-    ports:
-      - "8084:8080"
-    environment:
-      - PORT=8080
-      - APP_ENV=development
-      - KAFKA_BROKERS=kafka:29092
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=shipping_user
-      - DB_PASSWORD=shipping_pass
-      - DB_NAME=notification_db
-    depends_on:
-      kafka:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-
-  carrier_stats_service:
-    build:
-      context: .
-      dockerfile: Dockerfile.carrierstats
-    ports:
-      - "8085:8085"
-    environment:
-      - PORT=8085
-      - APP_ENV=development
-      - FREIGHTPULSE_BASE_URL=https://freightpulsehq.com/api/v1
-      - FREIGHTPULSE_API_KEY=${FREIGHTPULSE_API_KEY:-}
-      - MONGO_URI=mongodb://carrier_stats_mongo:27017
-      - MONGO_DB=carrier_stats_logs
-    depends_on:
-      carrier_stats_mongo:
-        condition: service_healthy
-
-  postgres:
-    image: postgres:16-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=shipping_user
-      - POSTGRES_PASSWORD=shipping_pass
-      - POSTGRES_DB=shipping_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shipping_user -d shipping_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  carrier_stats_mongo:
-    image: mongo:7
-    ports:
-      - "27018:27017"
-    environment:
-      - MONGO_INITDB_DATABASE=carrier_stats_logs
-    volumes:
-      - carrier_stats_mongo_data:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mongosh --quiet --eval 'db.runCommand({ ping: 1 })' mongodb://localhost:27017/carrier_stats_logs > /dev/null",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
-      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092"
-      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
-      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
-      KAFKA_LOG_DIRS: "/tmp/kraft-combined-logs"
-      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      - api-gateway
 
 volumes:
-  postgres_data:
-  carrier_stats_mongo_data:
+  db-data:

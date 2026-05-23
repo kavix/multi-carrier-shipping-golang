@@ -1,0 +1,12 @@
+package http
+
+import (
+	"encoding/json"
+	stdhttp "net/http"
+)
+
+func WriteJSON(w stdhttp.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}

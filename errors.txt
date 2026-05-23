@@ -1,0 +1,147 @@
+docker compose up --build
+#1 [internal] load local bake definitions
+#1 reading from stdin 2.94kB done
+#1 DONE 0.0s
+
+#2 [frontend internal] load build definition from Dockerfile
+#2 transferring dockerfile: 590B done
+#2 DONE 0.0s
+
+#3 [tracking-service internal] load build definition from Dockerfile
+#3 transferring dockerfile: 703B 0.0s done
+#3 DONE 0.1s
+
+#4 [order-service internal] load metadata for docker.io/library/golang:1.22-alpine
+#4 DONE 1.4s
+
+#5 [frontend internal] load metadata for docker.io/library/node:20-alpine
+#5 DONE 1.4s
+
+#6 [frontend internal] load .dockerignore
+#6 transferring context: 79B 0.0s done
+#6 DONE 0.0s
+
+#7 [order-service internal] load metadata for docker.io/library/alpine:3.19
+#7 DONE 1.4s
+
+#8 [frontend builder 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+#8 DONE 0.0s
+
+#9 [frontend builder 2/6] WORKDIR /app
+#9 CACHED
+
+#10 [tracking-service internal] load .dockerignore
+#10 transferring context: 81B done
+#10 DONE 0.0s
+
+#11 [frontend internal] load build context
+#11 transferring context: 377B done
+#11 DONE 0.0s
+
+#12 [frontend builder 3/6] COPY package.json ./
+#12 CACHED
+
+#13 [carrier-service builder 1/9] FROM docker.io/library/golang:1.22-alpine@sha256:1699c10032ca2582ec89a24a1312d986a3f094aed3d5c1147b19880afe40e052
+#13 DONE 0.0s
+
+#14 [carrier-service stage-1 1/4] FROM docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+#14 DONE 0.0s
+
+#15 [tracking-service internal] load build context
+#15 transferring context: 981B done
+#15 DONE 0.0s
+
+#16 [order-service stage-1 3/4] COPY --from=builder /usr/local/bin /usr/local/bin
+#16 CACHED
+
+#17 [order-service builder 9/9] RUN go build -o /usr/local/bin/api-gateway ./cmd/api-gateway
+#17 CACHED
+
+#18 [order-service builder 6/9] RUN go build -o /usr/local/bin/order-service ./cmd/order-service
+#18 CACHED
+
+#19 [order-service builder 2/9] WORKDIR /workspace
+#19 CACHED
+
+#20 [order-service builder 7/9] RUN go build -o /usr/local/bin/carrier-service ./cmd/carrier-service
+#20 CACHED
+
+#21 [order-service stage-1 2/4] RUN addgroup -S app && adduser -S app -G app
+#21 CACHED
+
+#22 [order-service builder 3/9] COPY go.mod .
+#22 CACHED
+
+#23 [order-service builder 4/9] RUN go mod download
+#23 CACHED
+
+#24 [order-service builder 8/9] RUN go build -o /usr/local/bin/tracking-service ./cmd/tracking-service
+#24 CACHED
+
+#25 [order-service builder 5/9] COPY . .
+#25 CACHED
+
+#26 [order-service stage-1 4/4] WORKDIR /app
+#26 CACHED
+
+#27 [order-service] exporting to image
+#27 exporting layers done
+#27 writing image sha256:dc3459d8cf30664cc6d82644a784136f7a2d315f9d5a28327647c7cf86137b1b done
+#27 naming to docker.io/library/multi-carrier-shipping-golang-order done
+#27 DONE 0.0s
+
+#28 [api-gateway] exporting to image
+#28 exporting layers done
+#28 writing image sha256:3ab80b03013531d7bb96f62588622fc792f7b71cccb55abefd534d31de1aa263 done
+#28 naming to docker.io/library/multi-carrier-shipping-golang-gateway done
+#28 DONE 0.0s
+
+#29 [carrier-service] exporting to image
+#29 exporting layers done
+#29 writing image sha256:6fe57f65c40708ee2952660af1e9f76bebc6e1f2686ec378675920087d01e8f1 done
+#29 naming to docker.io/library/multi-carrier-shipping-golang-carrier done
+#29 DONE 0.0s
+
+#30 [tracking-service] exporting to image
+#30 exporting layers done
+#30 writing image sha256:31993147ed62f201ed8de2d3435c1c7848c28e2ed9205846a5fb444435fbe5e7 done
+#30 naming to docker.io/library/multi-carrier-shipping-golang-tracking done
+#30 DONE 0.0s
+
+#31 [order-service] resolving provenance for metadata file
+#31 DONE 0.0s
+
+#32 [carrier-service] resolving provenance for metadata file
+#32 DONE 0.0s
+
+#33 [tracking-service] resolving provenance for metadata file
+#33 DONE 0.0s
+
+#34 [api-gateway] resolving provenance for metadata file
+#34 DONE 0.0s
+
+#35 [frontend builder 4/6] RUN npm install
+#35 6.158 npm error code ETARGET
+#35 6.158 npm error notarget No matching version found for @types/react@18.4.6.
+#35 6.158 npm error notarget In most cases you or one of your dependencies are requesting
+#35 6.158 npm error notarget a package version that doesn't exist.
+#35 6.161 npm notice
+#35 6.161 npm notice New major version of npm available! 10.8.2 -> 11.15.0
+#35 6.161 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+#35 6.161 npm notice To update run: npm install -g npm@11.15.0
+#35 6.161 npm notice
+#35 6.161 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-05-23T14_46_28_790Z-debug-0.log
+#35 ERROR: process "/bin/sh -c npm install" did not complete successfully: exit code: 1
+------
+ > [frontend builder 4/6] RUN npm install:
+6.158 npm error code ETARGET
+6.158 npm error notarget No matching version found for @types/react@18.4.6.
+6.158 npm error notarget In most cases you or one of your dependencies are requesting
+6.158 npm error notarget a package version that doesn't exist.
+6.161 npm notice
+6.161 npm notice New major version of npm available! 10.8.2 -> 11.15.0
+6.161 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+6.161 npm notice To update run: npm install -g npm@11.15.0
+6.161 npm notice
+6.161 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-05-23T14_46_28_790Z-debug-0.log
+------
