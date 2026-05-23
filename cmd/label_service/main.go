@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg := config.Load() // Also loads .env into os environment
 
 	// Label service uses port 8082 by default
 	port := os.Getenv("PORT")
@@ -57,19 +57,30 @@ func main() {
 	}
 	defer repo.Close()
 
-	// 2. Initialize FedEx client
+	// 2. Initialize FedEx client (credentials hardcoded for sandbox)
 	fedexClient := label.NewFedExClient(
 		"https://apis-sandbox.fedex.com",
 		"l7c62f6ca219c04c6ba1854d564537a3df",
 		"5bed90c7d3e34beb8f731d6e7bc9781d",
 	)
 
-	// 3. Initialize Service & Handlers
-	svc := label.NewLabelService(repo, fedexClient, shipmentServiceURL, authServiceURL)
+	// 3. Initialize DHL client (credentials loaded from .env)
+	dhlAPIKey := os.Getenv("DHL_API_KEY")
+	if dhlAPIKey == "" {
+		logger.Warn("DHL_API_KEY not set; DHL location search will be unavailable")
+	}
+	dhlClient := label.NewDHLClient("https://api-sandbox.dhl.com", dhlAPIKey)
+	logger.Info("DHL Location Finder client initialized", slog.String("base_url", "https://api-sandbox.dhl.com"))
+
+	// 4. Wrap both in a multi-carrier router
+	multiCarrier := label.NewMultiCarrierClient(fedexClient, dhlClient)
+
+	// 5. Initialize Service & Handlers
+	svc := label.NewLabelService(repo, multiCarrier, shipmentServiceURL, authServiceURL)
 	hdlr := label.NewLabelHandler(svc)
 	router := label.ConfigureRouter(hdlr, logger)
 
-	// 4. Configure Server
+	// 6. Configure Server
 	serverAddr := fmt.Sprintf(":%s", port)
 	server := &http.Server{
 		Addr:         serverAddr,
@@ -111,3 +122,4 @@ func main() {
 		logger.Info("Label Service exited cleanly.")
 	}
 }
+

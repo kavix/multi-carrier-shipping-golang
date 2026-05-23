@@ -40,7 +40,7 @@ func NewFedExClient(baseURL, apiKey, apiSecret string) *FedExClient {
 }
 
 // SearchLocations implements the CarrierService interface.
-func (c *FedExClient) SearchLocations(ctx context.Context, addressStr string) ([]LocationDetail, error) {
+func (c *FedExClient) SearchLocations(ctx context.Context, carrier, addressStr string) ([]LocationDetail, error) {
 	city, state, postal, country := ParseAddress(addressStr)
 
 	token, err := c.getAccessToken(ctx)
@@ -145,6 +145,7 @@ func (c *FedExClient) SearchLocations(ctx context.Context, addressStr string) ([
 		}
 
 		results = append(results, LocationDetail{
+			Carrier:             "FedEx",
 			Distance:            loc.Distance.Value,
 			Units:               loc.Distance.Units,
 			Name:                name,
@@ -159,6 +160,281 @@ func (c *FedExClient) SearchLocations(ctx context.Context, addressStr string) ([
 	return results, nil
 }
 
+// GetRatesAndTransitTimes calls POST /rate/v1/rates/quotes and returns structured RateQuote slice.
+// Works for worldwide shipments — no country restriction applied.
+func (c *FedExClient) GetRatesAndTransitTimes(ctx context.Context, weight float64, originPostal, originCountry, destPostal, destCountry string) ([]RateQuote, string, error) {
+	token, err := c.getAccessToken(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("fedex rates: token error: %w", err)
+	}
+
+	// Build minimal worldwide rate request per the Rates and Transit Times API spec
+	type money struct {
+		Amount   float64 `json:"amount"`
+		Currency string  `json:"currency"`
+	}
+	type addr struct {
+		PostalCode  string `json:"postalCode,omitempty"`
+		CountryCode string `json:"countryCode"`
+	}
+	type contact struct {
+		PersonName  string `json:"personName"`
+		PhoneNumber string `json:"phoneNumber"`
+	}
+	type party struct {
+		Contact contact `json:"contact"`
+		Address addr    `json:"address"`
+	}
+	type weightObj struct {
+		Units string  `json:"units"`
+		Value float64 `json:"value"`
+	}
+	type pkg struct {
+		Weight weightObj `json:"weight"`
+	}
+
+	reqBody := map[string]interface{}{
+		"accountNumber": map[string]string{
+			"value": "740561073", // sandbox account
+		},
+		"requestedShipment": map[string]interface{}{
+			"shipper":      party{Contact: contact{"Shipper", "1234567890"}, Address: addr{PostalCode: originPostal, CountryCode: originCountry}},
+			"recipient":    party{Contact: contact{"Recipient", "0987654321"}, Address: addr{PostalCode: destPostal, CountryCode: destCountry}},
+			"pickupType":   "DROPOFF_AT_FEDEX_LOCATION",
+			"rateRequestType": []string{"LIST", "ACCOUNT"},
+			"requestedPackageLineItems": []pkg{
+				{Weight: weightObj{Units: "KG", Value: weight}},
+			},
+		},
+	}
+
+	b, _ := json.Marshal(reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/rate/v1/rates/quotes", bytes.NewReader(b))
+	if err != nil {
+		return nil, "", fmt.Errorf("fedex rates: request build error: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-locale", "en_US")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("fedex rates: http error: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("fedex rates: API returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response — matches RateOutputVO schema from API docs
+	var raw struct {
+		Output struct {
+			QuoteDate       string `json:"quoteDate"`
+			RateReplyDetails []struct {
+				ServiceType  string `json:"serviceType"`
+				ServiceName  string `json:"serviceName"`
+				RatedShipmentDetails []struct {
+					RateType         string  `json:"rateType"`
+					TotalBaseCharge  float64 `json:"totalBaseCharge"`
+					TotalNetCharge   float64 `json:"totalNetCharge"`
+					Currency         string  `json:"currency"`
+					ShipmentRateDetail struct {
+						FuelSurchargePercent float64 `json:"fuelSurchargePercent"`
+						TotalSurcharges      float64 `json:"totalSurcharges"`
+						RateZone             string  `json:"rateZone"`
+						SurCharges []struct {
+							Type        string  `json:"type"`
+							Description string  `json:"description"`
+							Amount      float64 `json:"amount"`
+						} `json:"surCharges"`
+					} `json:"shipmentRateDetail"`
+				} `json:"ratedShipmentDetails"`
+				OperationalDetail struct {
+					TransitTime  string `json:"transitTime"`
+					DeliveryDay  string `json:"deliveryDay"`
+					CommitDate   string `json:"commitDate"`
+					DestinationPostalCode string `json:"destinationPostalCode"`
+				} `json:"operationalDetail"`
+				Commit struct {
+					DateDetail struct {
+						DayOfWeek    string `json:"dayOfWeek"`
+						DayCxsFormat string `json:"dayCxsFormat"`
+					} `json:"dateDetail"`
+				} `json:"commit"`
+			} `json:"rateReplyDetails"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, "", fmt.Errorf("fedex rates: JSON parse error: %w", err)
+	}
+
+	var quotes []RateQuote
+	seen := map[string]bool{}
+	for _, svc := range raw.Output.RateReplyDetails {
+		// Pick the best rate detail (prefer LIST rate for display)
+		var best *struct {
+			RateType         string  `json:"rateType"`
+			TotalBaseCharge  float64 `json:"totalBaseCharge"`
+			TotalNetCharge   float64 `json:"totalNetCharge"`
+			Currency         string  `json:"currency"`
+			ShipmentRateDetail struct {
+				FuelSurchargePercent float64 `json:"fuelSurchargePercent"`
+				TotalSurcharges      float64 `json:"totalSurcharges"`
+				RateZone             string  `json:"rateZone"`
+				SurCharges []struct {
+					Type        string  `json:"type"`
+					Description string  `json:"description"`
+					Amount      float64 `json:"amount"`
+				} `json:"surCharges"`
+			} `json:"shipmentRateDetail"`
+		}
+		for i := range svc.RatedShipmentDetails {
+			d := &svc.RatedShipmentDetails[i]
+			if best == nil || d.RateType == "LIST" {
+				best = (*struct {
+					RateType         string  `json:"rateType"`
+					TotalBaseCharge  float64 `json:"totalBaseCharge"`
+					TotalNetCharge   float64 `json:"totalNetCharge"`
+					Currency         string  `json:"currency"`
+					ShipmentRateDetail struct {
+						FuelSurchargePercent float64 `json:"fuelSurchargePercent"`
+						TotalSurcharges      float64 `json:"totalSurcharges"`
+						RateZone             string  `json:"rateZone"`
+						SurCharges []struct {
+							Type        string  `json:"type"`
+							Description string  `json:"description"`
+							Amount      float64 `json:"amount"`
+						} `json:"surCharges"`
+					} `json:"shipmentRateDetail"`
+				})(d)
+			}
+		}
+		if best == nil {
+			continue
+		}
+		key := svc.ServiceType + best.Currency
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		var surcharges []Surcharge
+		for _, s := range best.ShipmentRateDetail.SurCharges {
+			surcharges = append(surcharges, Surcharge{
+				Type:        s.Type,
+				Description: s.Description,
+				Amount:      s.Amount,
+				Currency:    best.Currency,
+			})
+		}
+
+		commitDT := svc.OperationalDetail.CommitDate
+		if svc.Commit.DateDetail.DayCxsFormat != "" {
+			commitDT = svc.Commit.DateDetail.DayCxsFormat
+		}
+		deliveryDay := svc.OperationalDetail.DeliveryDay
+		if svc.Commit.DateDetail.DayOfWeek != "" {
+			deliveryDay = svc.Commit.DateDetail.DayOfWeek
+		}
+
+		quotes = append(quotes, RateQuote{
+			ServiceType:        svc.ServiceType,
+			ServiceName:        svc.ServiceName,
+			Currency:           best.Currency,
+			BaseCharge:         best.TotalBaseCharge,
+			TotalNetCharge:     best.TotalNetCharge,
+			FuelSurcharge:      best.ShipmentRateDetail.FuelSurchargePercent,
+			TotalSurcharges:    best.ShipmentRateDetail.TotalSurcharges,
+			Surcharges:         surcharges,
+			TransitTime:        svc.OperationalDetail.TransitTime,
+			DeliveryDay:        deliveryDay,
+			CommitDateTime:     commitDT,
+			DeliveryPostalCode: svc.OperationalDetail.DestinationPostalCode,
+			RateZone:           best.ShipmentRateDetail.RateZone,
+		})
+	}
+
+	return quotes, raw.Output.QuoteDate, nil
+}
+
+// ValidatePostalCode calls POST /country/v1/postal/validate and returns structured PostalInfo.
+// Works worldwide — uses FDXE (FedEx Express) carrier code which has broadest international coverage.
+func (c *FedExClient) ValidatePostalCode(ctx context.Context, postalCode, stateOrProvince, countryCode string) (*PostalInfo, error) {
+	token, err := c.getAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fedex postal: token error: %w", err)
+	}
+
+	// Use tomorrow as shipDate (must be within next 10 days, not today)
+	tomorrow := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+
+	reqBody := map[string]interface{}{
+		"carrierCode":         "FDXE", // FedEx Express — best worldwide coverage
+		"countryCode":         strings.ToUpper(countryCode),
+		"stateOrProvinceCode": stateOrProvince,
+		"postalCode":          postalCode,
+		"shipDate":            tomorrow,
+		"checkForMismatch":    false, // Don't validate state vs postal match for international
+	}
+
+	b, _ := json.Marshal(reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/country/v1/postal/validate", bytes.NewReader(b))
+	if err != nil {
+		return nil, fmt.Errorf("fedex postal: request build: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-locale", "en_US")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fedex postal: http error: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fedex postal: API returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var raw struct {
+		Output struct {
+			CountryCode         string `json:"countryCode"`
+			StateOrProvinceCode string `json:"stateOrProvinceCode"`
+			CityFirstInitials   string `json:"cityFirstInitials"`
+			CleanedPostalCode   string `json:"cleanedPostalCode"`
+			LocationDescriptions []struct {
+				LocationID     string `json:"locationId"`
+				LocationNumber string `json:"locationNumber"`
+				ServiceArea    string `json:"serviceArea"`
+				AirportID      string `json:"airportId"`
+			} `json:"locationDescriptions"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("fedex postal: JSON parse: %w", err)
+	}
+
+	info := &PostalInfo{
+		PostalCode:          raw.Output.CleanedPostalCode,
+		CityFirstInitials:   raw.Output.CityFirstInitials,
+		StateOrProvinceCode: raw.Output.StateOrProvinceCode,
+		CountryCode:         raw.Output.CountryCode,
+	}
+	if raw.Output.CleanedPostalCode == "" {
+		info.PostalCode = postalCode // use original if cleaned not returned
+	}
+	if len(raw.Output.LocationDescriptions) > 0 {
+		info.AirportID = raw.Output.LocationDescriptions[0].AirportID
+		info.ServiceArea = raw.Output.LocationDescriptions[0].ServiceArea
+		info.LocationID = raw.Output.LocationDescriptions[0].LocationID
+	}
+
+	return info, nil
+}
+
 // GenerateLabel implements the CarrierService interface.
 func (c *FedExClient) GenerateLabel(ctx context.Context, shipmentID, carrier string, weight float64, origin, destination string) (*Label, error) {
 	// For demo/sandbox purposes, let's create a realistic FedEx tracking number
@@ -170,7 +446,7 @@ func (c *FedExClient) GenerateLabel(ctx context.Context, shipmentID, carrier str
 	fmt.Printf("\n=== SIMULATING FEDEX SANDBOX LABEL GENERATION ===\n")
 	fmt.Printf("Endpoint: %s/ship/v1/shipments\n", c.baseURL)
 	fmt.Printf("Carrier: FedEx\n")
-	fmt.Printf("Weight: %.2f lbs\n", weight)
+	fmt.Printf("Weight: %.2f kg\n", weight)
 	fmt.Printf("Origin: %s\n", origin)
 	fmt.Printf("Destination: %s\n", destination)
 	fmt.Printf("Generated Tracking Number: %s\n", trackingNumber)

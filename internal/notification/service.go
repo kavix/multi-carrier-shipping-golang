@@ -92,8 +92,14 @@ func (s *notificationService) sendRealYahooEmail(to, subject, bodyHTML string) e
 		return nil
 	}
 
-	from := "kavix@yahoo.com"
-	password := "khmvdagcssmvudxg"
+	from := os.Getenv("SMTP_FROM")
+	if from == "" {
+		from = "kavix@yahoo.com"
+	}
+	password := os.Getenv("SMTP_PASSWORD")
+	if password == "" {
+		password = "khmvdagcssmvudxg"
+	}
 	smtpHost := "smtp.mail.yahoo.com"
 	smtpPort := "465"
 

@@ -21,11 +21,12 @@ func TestCreateLabel(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful creation", func(t *testing.T) {
-		label, err := svc.CreateLabel(ctx, "shipment-123", "DHL", 5.5, "London", "Paris")
+		resp, err := svc.CreateLabel(ctx, "shipment-123", "DHL", 5.5, "London", "Paris")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
+		label := resp.Label
 		if label.ID == "" {
 			t.Errorf("expected generated ID to be populated, got empty string")
 		}

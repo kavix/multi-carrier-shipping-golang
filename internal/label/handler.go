@@ -52,7 +52,7 @@ func (h *LabelHandler) Create(c *gin.Context) {
 		return
 	}
 
-	label, err := h.service.CreateLabel(
+	labelResp, err := h.service.CreateLabel(
 		c.Request.Context(),
 		req.ShipmentID,
 		req.Carrier,
@@ -65,7 +65,7 @@ func (h *LabelHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, label)
+	c.JSON(http.StatusCreated, labelResp)
 }
 
 func (h *LabelHandler) Get(c *gin.Context) {
@@ -140,7 +140,8 @@ func (h *LabelHandler) handleError(c *gin.Context, err error) {
 		h.writeError(c, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrCarrierRequired),
 		errors.Is(err, ErrTrackingNumberRequired),
-		errors.Is(err, ErrInvalidWeight):
+		errors.Is(err, ErrInvalidWeight),
+		errors.Is(err, ErrUnsupportedCarrier):
 		h.writeError(c, http.StatusBadRequest, err.Error())
 	default:
 		h.writeError(c, http.StatusInternalServerError, "internal server error")
