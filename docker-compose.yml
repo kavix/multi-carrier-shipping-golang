@@ -385,12 +385,12 @@ services:
       dockerfile: ./notification-service/Dockerfile
     environment:
       KAFKA_BROKERS: kafka:29092
-      # Use MailHog for local SMTP testing
-      SMTP_HOST: mailhog
-      SMTP_PORT: "1025"
-      SMTP_FROM: test@example.com
-      SMTP_USER: ""
-      SMTP_PASSWORD: ""
+      # SMTP settings (can be provided via .env or environment)
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: "${SMTP_PORT:-1025}"
+      SMTP_FROM: ${SMTP_FROM:-test@example.com}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     depends_on:
       kafka:
         condition: service_healthy
