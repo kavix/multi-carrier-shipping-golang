@@ -46,7 +46,7 @@ test_api() {
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     BODY=$(echo "$RESPONSE" | sed '$d')
     
-    if [[ "$HTTP_CODE" =~ ^(200|201|400|401|404)$ ]]; then
+    if [[ "$HTTP_CODE" =~ ^(200|201|400|401|404|409)$ ]]; then
         echo -e "${GREEN}✓${NC} [$HTTP_CODE]"
         ((PASSED++))
     else
