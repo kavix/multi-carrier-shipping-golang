@@ -16,6 +16,7 @@ func main() {
 	h := handler.NewGatewayHandler()
 
 	r := gin.Default()
+	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.RequestLogger(log))
 	r.Use(middleware.AuthMiddleware())
 
