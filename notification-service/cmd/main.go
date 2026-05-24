@@ -17,7 +17,7 @@ func main() {
 	log := logger.Get()
 
 	cfg := config.Load()
-	svc := service.NewNotificationService()
+	svc := service.NewNotificationService(cfg)
 	cons := consumer.NewNotificationConsumer(svc)
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -2,14 +2,16 @@ package main
 
 import (
 	"database/sql"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"github.com/shipping/shared/pkg/kafka"
-	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/rate-comparison-service/internal/config"
 	"github.com/shipping/rate-comparison-service/internal/handler"
 	"github.com/shipping/rate-comparison-service/internal/repository"
 	"github.com/shipping/rate-comparison-service/internal/service"
+	"github.com/shipping/shared/pkg/kafka"
+	"github.com/shipping/shared/pkg/logger"
+	"github.com/shipping/shared/pkg/middleware"
 )
 
 func main() {
@@ -35,6 +37,10 @@ func main() {
 	h := handler.NewRateHandler(svc)
 
 	r := gin.Default()
+	r.Use(middleware.DownstreamContextMiddleware())
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "service": "rate-comparison-service"})
+	})
 	h.Routes(r)
 
 	log.Info("rate-comparison-service starting", logger.String("port", cfg.Port))

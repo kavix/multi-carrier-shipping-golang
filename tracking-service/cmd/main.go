@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/shipping/shared/pkg/kafka"
 	"github.com/shipping/shared/pkg/logger"
+	"github.com/shipping/shared/pkg/middleware"
 	"github.com/shipping/tracking-service/internal/config"
 	"github.com/shipping/tracking-service/internal/consumer"
 	"github.com/shipping/tracking-service/internal/handler"
@@ -42,6 +43,13 @@ func main() {
 	// Start HTTP API
 	h := handler.NewTrackingHandler(svc)
 	r := gin.Default()
+	// Extract user_id from headers set by API Gateway
+	r.Use(middleware.DownstreamContextMiddleware())
+
+	// Health endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "service": "tracking-service"})
+	})
 	h.Routes(r)
 
 	go func() {
