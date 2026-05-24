@@ -391,6 +391,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-test@example.com}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
     depends_on:
       kafka:
         condition: service_healthy

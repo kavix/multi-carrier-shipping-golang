@@ -29,11 +29,20 @@ func main() {
 		log.Fatal("db ping", logger.String("err", err.Error()))
 	}
 
-	producer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentCreated)
-	defer producer.Close()
+	createdProducer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentCreated)
+	defer createdProducer.Close()
+
+	updatedProducer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentUpdated)
+	defer updatedProducer.Close()
+
+	statusProducer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentStatusChanged)
+	defer statusProducer.Close()
+
+	deletedProducer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentDeleted)
+	defer deletedProducer.Close()
 
 	repo := repository.NewShipmentRepo(db)
-	svc := service.NewShipmentService(repo, producer)
+	svc := service.NewShipmentService(repo, createdProducer, updatedProducer, statusProducer, deletedProducer)
 	h := handler.NewShipmentHandler(svc)
 
 	r := gin.Default()
