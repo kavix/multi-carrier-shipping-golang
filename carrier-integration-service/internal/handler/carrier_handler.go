@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/shipping/carrier-integration-service/internal/service"
 )
@@ -29,6 +30,11 @@ func (h *CarrierHandler) RegisterCarrier(c *gin.Context) {
 	}
 	carrier, err := h.svc.RegisterCarrier(c.Request.Context(), req.Name, req.Code, req.APIKey, req.APISecret, req.BaseURL)
 	if err != nil {
+		// Map DB unique-constraint errors to HTTP 409 Conflict
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			c.JSON(http.StatusConflict, gin.H{"error": "carrier with this code already exists"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
