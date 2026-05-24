@@ -385,12 +385,12 @@ services:
       dockerfile: ./notification-service/Dockerfile
     environment:
       KAFKA_BROKERS: kafka:29092
-      # SMTP (Yahoo)
-      SMTP_HOST: smtp.mail.yahoo.com
-      SMTP_PORT: "587"
-      SMTP_FROM: kavix@yahoo.com
-      SMTP_USER: kavix@yahoo.com
-      SMTP_PASSWORD: khmvdagcssmvudxg
+      # SMTP settings (can be provided via .env or environment)
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: "${SMTP_PORT:-1025}"
+      SMTP_FROM: ${SMTP_FROM:-test@example.com}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     depends_on:
       kafka:
         condition: service_healthy
@@ -400,6 +400,17 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "8025:8025" # web UI
+      - "1025:1025" # SMTP
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 1025 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api-gateway:
     build:
