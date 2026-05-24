@@ -7,12 +7,13 @@ import (
 )
 
 type Config struct {
-	KafkaBrokers []string
-	SMTPHost     string
-	SMTPPort     int
-	SMTPFrom     string
-	SMTPUser     string
-	SMTPPassword string
+	KafkaBrokers   []string
+	SMTPHost       string
+	SMTPPort       int
+	SMTPFrom       string
+	SMTPUser       string
+	SMTPPassword   string
+	SendGridAPIKey string
 }
 
 func Load() *Config {
@@ -38,13 +39,15 @@ func Load() *Config {
 	if smtpPassword == "" {
 		smtpPassword = os.Getenv("SMTP_PASS")
 	}
+	sendgridAPIKey := os.Getenv("SENDGRID_API_KEY")
 
 	return &Config{
-		KafkaBrokers:  strings.Split(brokers, ","),
-		SMTPHost:      smtpHost,
-		SMTPPort:      smtpPort,
-		SMTPFrom:      smtpFrom,
-		SMTPUser:      smtpUser,
-		SMTPPassword:  smtpPassword,
+		KafkaBrokers:   strings.Split(brokers, ","),
+		SMTPHost:       smtpHost,
+		SMTPPort:       smtpPort,
+		SMTPFrom:       smtpFrom,
+		SMTPUser:       smtpUser,
+		SMTPPassword:   smtpPassword,
+		SendGridAPIKey: sendgridAPIKey,
 	}
 }

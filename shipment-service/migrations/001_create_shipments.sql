@@ -3,8 +3,10 @@ CREATE TABLE IF NOT EXISTS shipments (
     user_id VARCHAR(36) NOT NULL,
     sender_name VARCHAR(255) NOT NULL,
     sender_address TEXT NOT NULL,
+    sender_email VARCHAR(255),
     receiver_name VARCHAR(255) NOT NULL,
     receiver_address TEXT NOT NULL,
+    receiver_email VARCHAR(255),
     weight DECIMAL(10,2) NOT NULL,
     dimensions VARCHAR(50),
     carrier VARCHAR(50) NOT NULL,
@@ -15,3 +17,7 @@ CREATE TABLE IF NOT EXISTS shipments (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS sender_email VARCHAR(255);
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS receiver_email VARCHAR(255);
+

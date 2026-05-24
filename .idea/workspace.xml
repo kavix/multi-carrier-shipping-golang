@@ -5,29 +5,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="c8af0a7b-fb28-4df3-ad73-930006081f23" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/frontend/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/src/App.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/src/components/ApiForm.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/src/main.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/src/styles.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/vite.config.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/address-validation-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/address-validation-service/cmd/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/billing-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/billing-service/cmd/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/carrier-integration-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/carrier-integration-service/cmd/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/label-generation-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/label-generation-service/cmd/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/cmd/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/notification-service/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/internal/config/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/internal/consumer/event_consumer.go" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/internal/consumer/event_consumer.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/notification-service/internal/service/notification_service.go" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/internal/service/notification_service.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/rate-comparison-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/rate-comparison-service/cmd/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/return-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/return-service/cmd/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/shipment-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/shipment-service/cmd/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tracking-service/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/tracking-service/cmd/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shipment-service/internal/domain/shipment.go" beforeDir="false" afterPath="$PROJECT_DIR$/shipment-service/internal/domain/shipment.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shipment-service/internal/repository/shipment_repo.go" beforeDir="false" afterPath="$PROJECT_DIR$/shipment-service/internal/repository/shipment_repo.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shipment-service/internal/service/shipment_service.go" beforeDir="false" afterPath="$PROJECT_DIR$/shipment-service/internal/service/shipment_service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shipment-service/migrations/001_create_shipments.sql" beforeDir="false" afterPath="$PROJECT_DIR$/shipment-service/migrations/001_create_shipments.sql" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -141,7 +130,7 @@
     "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "deploy-ready",
+    "git-widget-placeholder": "add/cors-and-idempotent-tests",
     "go.sdk.automatically.set": "true",
     "last_opened_file_path": "/Users/kavindus/Downloads/multi-carrier-shipping",
     "node.js.detected.package.eslint": "true",

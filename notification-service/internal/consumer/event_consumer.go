@@ -11,13 +11,15 @@ import (
 )
 
 type ShipmentEvent struct {
-	ShipmentID string `json:"shipment_id"`
-	UserID     string `json:"user_id"`
-	Carrier    string `json:"carrier"`
-	Status     string `json:"status"`
-	Sender     string `json:"sender"`
-	Receiver   string `json:"receiver"`
-	EventType  string `json:"event_type"`
+	ShipmentID    string `json:"shipment_id"`
+	UserID        string `json:"user_id"`
+	Carrier       string `json:"carrier"`
+	Status        string `json:"status"`
+	Sender        string `json:"sender"`
+	Receiver      string `json:"receiver"`
+	SenderEmail   string `json:"sender_email"`
+	ReceiverEmail string `json:"receiver_email"`
+	EventType     string `json:"event_type"`
 }
 
 type TrackingEvent struct {
@@ -63,7 +65,27 @@ You will receive tracking updates as your package moves.
 Thank you for using our service!
 `, event.ShipmentID, event.Carrier, event.Status, event.Sender, event.Receiver)
 
-	return c.service.SendEmail(event.UserID+"@example.com", subject, body)
+	var errs []error
+	if event.SenderEmail != "" {
+		if err := c.service.SendEmail(event.SenderEmail, subject, body); err != nil {
+			errs = append(errs, fmt.Errorf("send created email to sender (%s): %w", event.SenderEmail, err))
+		}
+	} else {
+		if err := c.service.SendEmail(event.UserID+"@example.com", subject, body); err != nil {
+			errs = append(errs, fmt.Errorf("send created email to fallback sender: %w", err))
+		}
+	}
+
+	if event.ReceiverEmail != "" {
+		if err := c.service.SendEmail(event.ReceiverEmail, subject, body); err != nil {
+			errs = append(errs, fmt.Errorf("send created email to receiver (%s): %w", event.ReceiverEmail, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("created notification errors: %v", errs)
+	}
+	return nil
 }
 
 func (c *NotificationConsumer) HandleShipmentStatusChanged(ctx context.Context, key string, payload []byte) error {
@@ -91,7 +113,27 @@ Track your shipment at: https://tracking.example.com/%s
 Thank you!
 `, event.ShipmentID, event.Status, event.Carrier, event.ShipmentID)
 
-	return c.service.SendEmail(event.UserID+"@example.com", subject, body)
+	var errs []error
+	if event.SenderEmail != "" {
+		if err := c.service.SendEmail(event.SenderEmail, subject, body); err != nil {
+			errs = append(errs, fmt.Errorf("send status changed email to sender (%s): %w", event.SenderEmail, err))
+		}
+	} else {
+		if err := c.service.SendEmail(event.UserID+"@example.com", subject, body); err != nil {
+			errs = append(errs, fmt.Errorf("send status changed email to fallback sender: %w", err))
+		}
+	}
+
+	if event.ReceiverEmail != "" {
+		if err := c.service.SendEmail(event.ReceiverEmail, subject, body); err != nil {
+			errs = append(errs, fmt.Errorf("send status changed email to receiver (%s): %w", event.ReceiverEmail, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("status changed notification errors: %v", errs)
+	}
+	return nil
 }
 
 func (c *NotificationConsumer) HandleTrackingUpdated(ctx context.Context, key string, payload []byte) error {
