@@ -86,6 +86,9 @@ func (h *GatewayHandler) Routes(r *gin.Engine) {
 	r.Any("/returns", func(c *gin.Context) { h.proxy(c, "return") })
 	r.Any("/returns/:id", func(c *gin.Context) { h.proxy(c, "return") })
 	r.Any("/returns/:id/labels", func(c *gin.Context) { h.proxy(c, "return") })
+	// Proxy return approve and refund endpoints
+	r.Any("/returns/:id/approve", func(c *gin.Context) { h.proxy(c, "return") })
+	r.Any("/returns/:id/refund", func(c *gin.Context) { h.proxy(c, "return") })
 }
 
 func getEnv(key, defaultVal string) string {
