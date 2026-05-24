@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,14 +16,14 @@ type GatewayHandler struct {
 func NewGatewayHandler() *GatewayHandler {
 	return &GatewayHandler{
 		services: map[string]string{
-			"shipment":    getEnv("SHIPMENT_SERVICE_URL", "http://shipment-service:8081"),
-			"carrier":     getEnv("CARRIER_SERVICE_URL", "http://carrier-integration-service:8082"),
-			"rate":        getEnv("RATE_SERVICE_URL", "http://rate-comparison-service:8083"),
-			"label":       getEnv("LABEL_SERVICE_URL", "http://label-generation-service:8084"),
-			"tracking":    getEnv("TRACKING_SERVICE_URL", "http://tracking-service:8085"),
-			"address":     getEnv("ADDRESS_SERVICE_URL", "http://address-validation-service:8086"),
-			"billing":     getEnv("BILLING_SERVICE_URL", "http://billing-service:8087"),
-			"return":      getEnv("RETURN_SERVICE_URL", "http://return-service:8088"),
+			"shipment": getEnv("SHIPMENT_SERVICE_URL", "http://shipment-service:8081"),
+			"carrier":  getEnv("CARRIER_SERVICE_URL", "http://carrier-integration-service:8082"),
+			"rate":     getEnv("RATE_SERVICE_URL", "http://rate-comparison-service:8083"),
+			"label":    getEnv("LABEL_SERVICE_URL", "http://label-generation-service:8084"),
+			"tracking": getEnv("TRACKING_SERVICE_URL", "http://tracking-service:8085"),
+			"address":  getEnv("ADDRESS_SERVICE_URL", "http://address-validation-service:8086"),
+			"billing":  getEnv("BILLING_SERVICE_URL", "http://billing-service:8087"),
+			"return":   getEnv("RETURN_SERVICE_URL", "http://return-service:8088"),
 		},
 	}
 }
@@ -36,11 +37,19 @@ func (h *GatewayHandler) proxy(c *gin.Context, service string) {
 	url := baseURL + c.Request.URL.Path
 	body, _ := io.ReadAll(c.Request.Body)
 	req, _ := http.NewRequest(c.Request.Method, url, bytes.NewReader(body))
+
+	// Forward all original request headers
 	for k, v := range c.Request.Header {
 		for _, val := range v {
 			req.Header.Add(k, val)
 		}
 	}
+
+	// Forward user_id from context as custom header for downstream services
+	if userID, exists := c.Get("user_id"); exists {
+		req.Header.Add("X-User-ID", userID.(string))
+	}
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
