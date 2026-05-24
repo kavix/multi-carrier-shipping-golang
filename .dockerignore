@@ -1,0 +1,9 @@
+.git
+.DS_Store
+**/node_modules
+**/dist
+**/vendor
+**/err.txt
+docker-compose.yml
+README.md
+.env.example

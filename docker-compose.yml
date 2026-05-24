@@ -1,0 +1,313 @@
+services:
+  # ==========================================
+  # INFRASTRUCTURE
+  # ==========================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  # PostgreSQL - One per service (Database-per-Service pattern)
+  postgres-shipment:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shipments
+    ports:
+      - "5431:5432"
+    volumes:
+      - shipment-db:/var/lib/postgresql/data
+
+  postgres-carrier:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: carriers
+    ports:
+      - "5432:5432"
+    volumes:
+      - carrier-db:/var/lib/postgresql/data
+
+  postgres-rate:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rates
+    ports:
+      - "5433:5432"
+    volumes:
+      - rate-db:/var/lib/postgresql/data
+
+  postgres-label:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: labels
+    ports:
+      - "5434:5432"
+    volumes:
+      - label-db:/var/lib/postgresql/data
+
+  postgres-tracking:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tracking
+    ports:
+      - "5435:5432"
+    volumes:
+      - tracking-db:/var/lib/postgresql/data
+
+  postgres-address:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: addresses
+    ports:
+      - "5436:5432"
+    volumes:
+      - address-db:/var/lib/postgresql/data
+
+  postgres-billing:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: billing
+    ports:
+      - "5437:5432"
+    volumes:
+      - billing-db:/var/lib/postgresql/data
+
+  postgres-return:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: returns
+    ports:
+      - "5438:5432"
+    volumes:
+      - return-db:/var/lib/postgresql/data
+
+  # ==========================================
+  # MICROSERVICES
+  # ==========================================
+
+  shipment-service:
+    build:
+      context: .
+      dockerfile: ./shipment-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: 8081
+      DB_HOST: postgres-shipment
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: shipments
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      - postgres-shipment
+      - kafka
+
+  carrier-integration-service:
+    build:
+      context: .
+      dockerfile: ./carrier-integration-service/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      DB_HOST: postgres-carrier
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: carriers
+    depends_on:
+      - postgres-carrier
+
+  rate-comparison-service:
+    build:
+      context: .
+      dockerfile: ./rate-comparison-service/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      PORT: 8083
+      DB_HOST: postgres-rate
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: rates
+      KAFKA_BROKERS: kafka:29092
+      CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+    depends_on:
+      - postgres-rate
+      - kafka
+      - carrier-integration-service
+
+  label-generation-service:
+    build:
+      context: .
+      dockerfile: ./label-generation-service/Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      PORT: 8084
+      DB_HOST: postgres-label
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: labels
+      KAFKA_BROKERS: kafka:29092
+      CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+    depends_on:
+      - postgres-label
+      - kafka
+      - carrier-integration-service
+
+  tracking-service:
+    build:
+      context: .
+      dockerfile: ./tracking-service/Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      PORT: 8085
+      DB_HOST: postgres-tracking
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: tracking
+      KAFKA_BROKERS: kafka:29092
+      CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+    depends_on:
+      - postgres-tracking
+      - kafka
+
+  address-validation-service:
+    build:
+      context: .
+      dockerfile: ./address-validation-service/Dockerfile
+    ports:
+      - "8086:8086"
+    environment:
+      PORT: 8086
+      DB_HOST: postgres-address
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: addresses
+      KAFKA_BROKERS: kafka:29092
+      CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+    depends_on:
+      - postgres-address
+      - kafka
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: ./billing-service/Dockerfile
+    ports:
+      - "8087:8087"
+    environment:
+      PORT: 8087
+      DB_HOST: postgres-billing
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: billing
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      - postgres-billing
+      - kafka
+
+  return-service:
+    build:
+      context: .
+      dockerfile: ./return-service/Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      PORT: 8088
+      DB_HOST: postgres-return
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: returns
+      KAFKA_BROKERS: kafka:29092
+      LABEL_SERVICE_URL: http://label-generation-service:8084
+    depends_on:
+      - postgres-return
+      - kafka
+      - label-generation-service
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./notification-service/Dockerfile
+    environment:
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      - kafka
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./api-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      SHIPMENT_SERVICE_URL: http://shipment-service:8081
+      CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+      RATE_SERVICE_URL: http://rate-comparison-service:8083
+      LABEL_SERVICE_URL: http://label-generation-service:8084
+      TRACKING_SERVICE_URL: http://tracking-service:8085
+      ADDRESS_SERVICE_URL: http://address-validation-service:8086
+      BILLING_SERVICE_URL: http://billing-service:8087
+      RETURN_SERVICE_URL: http://return-service:8088
+    depends_on:
+      - shipment-service
+      - carrier-integration-service
+      - rate-comparison-service
+      - label-generation-service
+      - tracking-service
+      - address-validation-service
+      - billing-service
+      - return-service
+
+volumes:
+  shipment-db:
+  carrier-db:
+  rate-db:
+  label-db:
+  tracking-db:
+  address-db:
+  billing-db:
+  return-db:
