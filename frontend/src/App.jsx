@@ -1,31 +1,129 @@
 import React, { useState } from 'react'
+import Dashboard from './components/Dashboard'
+import ShipmentList from './components/ShipmentList'
+import ShipmentDetail from './components/ShipmentDetail'
+import CreateShipment from './components/CreateShipment'
+import Settings from './components/Settings'
 import ApiForm from './components/ApiForm'
 
 const DEFAULT_API = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const DEFAULT_TOKEN = 'Bearer test-token'
 
 export default function App() {
+  const [view, setView] = useState('dashboard')
+  const [selectedShipmentId, setSelectedShipmentId] = useState(null)
   const [baseUrl, setBaseUrl] = useState(DEFAULT_API)
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(DEFAULT_TOKEN)
+
+  const handleSelectShipment = (id) => {
+    setSelectedShipmentId(id)
+    setView('detail')
+  }
+
+  const handleCreateSuccess = (shipment) => {
+    setView('list')
+    // Optionally show a success message
+  }
+
+  const renderContent = () => {
+    switch (view) {
+      case 'dashboard':
+        return <Dashboard />
+      case 'list':
+        return <ShipmentList onSelectShipment={handleSelectShipment} />
+      case 'detail':
+        return <ShipmentDetail shipmentId={selectedShipmentId} onBack={() => setView('list')} />
+      case 'create':
+        return <CreateShipment onSuccess={handleCreateSuccess} onCancel={() => setView('list')} />
+      case 'settings':
+        return <Settings baseUrl={baseUrl} onBaseUrlChange={setBaseUrl} token={token} onTokenChange={setToken} />
+      case 'api-test':
+        return <ApiTestView baseUrl={baseUrl} token={token} />
+      default:
+        return <Dashboard />
+    }
+  }
 
   return (
-    <div className="container">
-      <header>
-        <h1>Multi-Carrier Shipping — Frontend</h1>
-        <div className="controls">
-          <label>
-            API Base URL:
-            <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} />
-          </label>
-          <label>
-            Authorization Token (optional):
-            <input value={token} onChange={e => setToken(e.target.value)} placeholder="Bearer ..." />
-          </label>
+    <div className="app">
+      <nav className="sidebar">
+        <div className="logo">
+          <h2>📦 Shipping</h2>
         </div>
-      </header>
 
-      <main>
-        <section>
-          <h2>Shipments</h2>
+        <ul className="nav-menu">
+          <li>
+            <button
+              className={`nav-item ${view === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setView('dashboard')}
+            >
+              📊 Dashboard
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item ${view === 'list' ? 'active' : ''}`}
+              onClick={() => setView('list')}
+            >
+              📋 Shipments
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item ${view === 'create' ? 'active' : ''}`}
+              onClick={() => setView('create')}
+            >
+              ➕ Create Shipment
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item ${view === 'api-test' ? 'active' : ''}`}
+              onClick={() => setView('api-test')}
+            >
+              🧪 API Test
+            </button>
+          </li>
+        </ul>
+
+        <ul className="nav-menu nav-bottom">
+          <li>
+            <button
+              className={`nav-item ${view === 'settings' ? 'active' : ''}`}
+              onClick={() => setView('settings')}
+            >
+              ⚙️ Settings
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      <div className="main-content">
+        {renderContent()}
+      </div>
+    </div>
+  )
+}
+
+function ApiTestView({ baseUrl, token }) {
+  const [showForm, setShowForm] = useState(false)
+
+  return (
+    <div className="api-test-view">
+      <h1>API Testing Console</h1>
+      <p style={{ color: '#6b7280', marginBottom: '20px' }}>
+        Test individual API endpoints manually
+      </p>
+
+      <div style={{ marginBottom: '20px' }}>
+        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+          {showForm ? '✕ Hide' : '+ New Request'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+          <h3>Shipments</h3>
           <ApiForm
             title="List Shipments"
             method="GET"
@@ -42,72 +140,44 @@ export default function App() {
             defaultBody={{
               sender_name: 'John Doe',
               sender_address: '123 Main St, New York, NY 10001',
-              sender_phone: '+1-555-0100',
               sender_email: 'john@example.com',
               receiver_name: 'Jane Smith',
               receiver_address: '456 Oak Ave, Los Angeles, CA 90001',
-              receiver_phone: '+1-555-0200',
               receiver_email: 'jane@example.com',
               weight: 2.5,
               dimensions: '10x10x10',
-              description: 'Electronics package',
               carrier: 'dhl',
               service_type: 'express',
             }}
           />
-        </section>
 
-        <section>
-          <h2>Rates</h2>
+          <h3>Carriers</h3>
+          <ApiForm
+            title="Get Carrier Rates"
+            method="GET"
+            path="/carriers/rates?from=New+York&to=Los+Angeles&weight=2.5"
+            baseUrl={baseUrl}
+            token={token}
+          />
+          <ApiForm
+            title="Carrier Tracking"
+            method="GET"
+            path="/carriers/tracking?carrier=dhl&tracking_number=1234567890"
+            baseUrl={baseUrl}
+            token={token}
+          />
+
+          <h3>Rates</h3>
           <ApiForm
             title="Compare Rates"
             method="POST"
             path="/rates/compare"
             baseUrl={baseUrl}
             token={token}
-            defaultBody={{ shipment_id: 'SHIP-001', from: 'New York, NY 10001', to: 'Los Angeles, CA 90001', weight: 2.5 }}
+            defaultBody={{ shipment_id: 'SHIP-001', from: 'New York', to: 'Los Angeles', weight: 2.5 }}
           />
-          <ApiForm
-            title="Get Carrier Rates (Query)"
-            method="GET"
-            path="/carriers/rates?from=New+York&to=Los+Angeles&weight=2.5"
-            baseUrl={baseUrl}
-            token={token}
-          />
-        </section>
 
-        <section>
-          <h2>Labels</h2>
-          <ApiForm
-            title="Generate Label"
-            method="POST"
-            path="/labels"
-            baseUrl={baseUrl}
-            token={token}
-            defaultBody={{ shipment_id: 'SHIP-001', carrier: 'dhl', format: 'pdf' }}
-          />
-        </section>
-
-        <section>
-          <h2>Tracking</h2>
-          <ApiForm
-            title="Get Tracking History"
-            method="GET"
-            path="/tracking/SHIP-001"
-            baseUrl={baseUrl}
-            token={token}
-          />
-          <ApiForm
-            title="Carrier Tracking (Query)"
-            method="GET"
-            path="/carriers/tracking?carrier=dhl&tracking_number=1234567890"
-            baseUrl={baseUrl}
-            token={token}
-          />
-        </section>
-
-        <section>
-          <h2>Address</h2>
+          <h3>Address</h3>
           <ApiForm
             title="Validate Address"
             method="POST"
@@ -116,10 +186,8 @@ export default function App() {
             token={token}
             defaultBody={{ address: '123 Main St, New York, NY' }}
           />
-        </section>
 
-        <section>
-          <h2>Billing</h2>
+          <h3>Billing</h3>
           <ApiForm
             title="Create Invoice"
             method="POST"
@@ -128,10 +196,8 @@ export default function App() {
             token={token}
             defaultBody={{ shipment_id: 'SHIP-001', amount: 45.99, currency: 'USD', due_date: '2026-06-24' }}
           />
-        </section>
 
-        <section>
-          <h2>Returns</h2>
+          <h3>Returns</h3>
           <ApiForm
             title="Request Return"
             method="POST"
@@ -140,13 +206,8 @@ export default function App() {
             token={token}
             defaultBody={{ shipment_id: 'SHIP-001', reason: 'Product damaged' }}
           />
-        </section>
-
-      </main>
-
-      <footer>
-        <small>Frontend for local development. Uses API Gateway by default at http://localhost:8080</small>
-      </footer>
+        </div>
+      )}
     </div>
   )
 }
