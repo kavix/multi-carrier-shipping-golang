@@ -34,12 +34,12 @@ print_test() {
 
 print_success() {
     echo -e "${GREEN}✓ $1${NC}"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 }
 
 print_error() {
     echo -e "${RED}✗ $1${NC}"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
 # Health Check Tests
@@ -54,7 +54,7 @@ else
 fi
 
 # Test individual services via direct port
-for SERVICE_NAME in "Shipment:8081" "Carrier:8082" "Rate:8083" "Label:8084" "Tracking:8085" "Address:8086" "Billing:8087" "Return:8088"; do
+for SERVICE_NAME in "Shipment:8001" "Carrier:8002" "Rate:8003" "Label:8004" "Tracking:8005" "Address:8006" "Billing:8007" "Return:8008"; do
     IFS=: read name port <<< "$SERVICE_NAME"
     print_test "$name Service Health (port $port)"
     if curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
@@ -68,7 +68,7 @@ done
 print_header "SHIPMENT SERVICE - Testing shipment creation and management"
 
 print_test "Create Shipment"
-SHIPMENT_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/shipment-service/shipments" \
+SHIPMENT_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/shipments" \
     -H "$AUTH_HEADER" \
     -H "Content-Type: application/json" \
     -d '{
@@ -99,7 +99,7 @@ fi
 # Test Get Shipment
 if [ ! -z "$SHIPMENT_ID" ] && [ "$SHIPMENT_ID" != "null" ]; then
     print_test "Get Shipment Details"
-    if curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/shipment-service/shipments/$SHIPMENT_ID" | grep -q "$SHIPMENT_ID"; then
+    if curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/shipments/$SHIPMENT_ID" | grep -q "$SHIPMENT_ID"; then
         print_success "Retrieved shipment details"
     else
         print_error "Failed to retrieve shipment"
@@ -108,7 +108,7 @@ fi
 
 # Test List Shipments
 print_test "List User Shipments"
-SHIPMENTS_LIST=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/shipment-service/shipments")
+SHIPMENTS_LIST=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/shipments")
 if echo "$SHIPMENTS_LIST" | grep -q "sender_name"; then
     print_success "Listed shipments successfully"
 else
@@ -119,7 +119,7 @@ fi
 print_header "CARRIER INTEGRATION SERVICE - Testing carrier operations"
 
 print_test "Register Carrier"
-CARRIER_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/carrier-integration-service/carriers" \
+CARRIER_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/carriers" \
     -H "$AUTH_HEADER" \
     -H "Content-Type: application/json" \
     -d '{
@@ -140,7 +140,7 @@ fi
 
 # Test Get Rates
 print_test "Get Carrier Rates"
-RATES_RESPONSE=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/carrier-integration-service/carriers/rates?from=New%20York&to=Los%20Angeles&weight=2.5")
+RATES_RESPONSE=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/carriers/rates?from=New%20York&to=Los%20Angeles&weight=2.5")
 if echo "$RATES_RESPONSE" | grep -q -E "carrier|rate"; then
     print_success "Retrieved carrier rates"
 else
@@ -151,7 +151,7 @@ fi
 print_header "RATE COMPARISON SERVICE - Testing rate comparison"
 
 print_test "Compare Rates"
-COMPARE_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/rate-comparison-service/rates/compare" \
+COMPARE_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/rates/compare" \
     -H "$AUTH_HEADER" \
     -H "Content-Type: application/json" \
     -d '{
@@ -172,7 +172,7 @@ print_header "LABEL GENERATION SERVICE - Testing label generation"
 
 if [ ! -z "$SHIPMENT_ID" ] && [ "$SHIPMENT_ID" != "null" ]; then
     print_test "Generate Shipping Label"
-    LABEL_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/label-generation-service/labels" \
+    LABEL_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/labels" \
         -H "$AUTH_HEADER" \
         -H "Content-Type: application/json" \
         -d '{
@@ -197,7 +197,7 @@ print_header "TRACKING SERVICE - Testing tracking"
 
 if [ ! -z "$SHIPMENT_ID" ] && [ "$SHIPMENT_ID" != "null" ]; then
     print_test "Get Shipment Tracking"
-    TRACKING_RESPONSE=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/tracking-service/tracking/$SHIPMENT_ID")
+    TRACKING_RESPONSE=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/tracking/$SHIPMENT_ID")
     
     if echo "$TRACKING_RESPONSE" | grep -q -E "tracking|status"; then
         print_success "Retrieved tracking information"
@@ -210,7 +210,7 @@ fi
 print_header "ADDRESS VALIDATION SERVICE - Testing address validation"
 
 print_test "Validate Address"
-ADDRESS_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/address-validation-service/addresses/validate" \
+ADDRESS_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/addresses/validate" \
     -H "$AUTH_HEADER" \
     -H "Content-Type: application/json" \
     -d '{
@@ -228,7 +228,7 @@ else
 fi
 
 print_test "Find Pickup Locations"
-PICKUP_RESPONSE=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/address-validation-service/addresses/pickup-locations?address=New%20York&carrier=dhl&limit=5")
+PICKUP_RESPONSE=$(curl -s -H "$AUTH_HEADER" "$GATEWAY_URL/addresses/pickup-locations?address=New%20York&carrier=dhl&limit=5")
 if echo "$PICKUP_RESPONSE" | grep -q -E "location|pickup"; then
     print_success "Retrieved pickup locations"
 else
@@ -239,7 +239,7 @@ fi
 print_header "BILLING SERVICE - Testing billing operations"
 
 print_test "Create Invoice"
-INVOICE_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/billing-service/billing/invoices" \
+INVOICE_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/billing/invoices" \
     -H "$AUTH_HEADER" \
     -H "Content-Type: application/json" \
     -d '{
@@ -262,7 +262,7 @@ print_header "RETURN SERVICE - Testing return management"
 
 if [ ! -z "$SHIPMENT_ID" ] && [ "$SHIPMENT_ID" != "null" ]; then
     print_test "Create Return Request"
-    RETURN_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/return-service/returns" \
+    RETURN_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/returns" \
         -H "$AUTH_HEADER" \
         -H "Content-Type: application/json" \
         -d '{

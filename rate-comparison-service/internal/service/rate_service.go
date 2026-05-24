@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"time"
@@ -28,13 +29,18 @@ func NewRateService(repo *repository.RateRepo, producer *kafka.Producer) *RateSe
 func (s *RateService) CompareRates(ctx context.Context, userID, shipmentID, from, to string, weight float64) (*domain.RateComparison, error) {
 	// Call carrier integration service to get rates from all carriers
 	carrierServiceURL := getEnv("CARRIER_SERVICE_URL", "http://carrier-integration-service:8082")
-	url := fmt.Sprintf("%s/carriers/rates?from=%s&to=%s&weight=%.2f", carrierServiceURL, from, to, weight)
+	apiURL := fmt.Sprintf("%s/carriers/rates?from=%s&to=%s&weight=%.2f", 
+		carrierServiceURL, url.QueryEscape(from), url.QueryEscape(to), weight)
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch carrier rates: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("carrier service returned status: %d", resp.StatusCode)
+	}
 
 	var rates []domain.RateResult
 	if err := json.NewDecoder(resp.Body).Decode(&rates); err != nil {
