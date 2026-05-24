@@ -34,7 +34,7 @@ func (h *GatewayHandler) proxy(c *gin.Context, service string) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "unknown service"})
 		return
 	}
-	url := baseURL + c.Request.URL.Path
+	url := baseURL + c.Request.URL.RequestURI()
 	body, _ := io.ReadAll(c.Request.Body)
 	req, _ := http.NewRequest(c.Request.Method, url, bytes.NewReader(body))
 
@@ -64,6 +64,8 @@ func (h *GatewayHandler) proxy(c *gin.Context, service string) {
 func (h *GatewayHandler) Routes(r *gin.Engine) {
 	r.Any("/shipments", func(c *gin.Context) { h.proxy(c, "shipment") })
 	r.Any("/shipments/:id", func(c *gin.Context) { h.proxy(c, "shipment") })
+	// Proxy shipment status updates
+	r.Any("/shipments/:id/status", func(c *gin.Context) { h.proxy(c, "shipment") })
 	r.Any("/carriers", func(c *gin.Context) { h.proxy(c, "carrier") })
 	r.Any("/carriers/:id", func(c *gin.Context) { h.proxy(c, "carrier") })
 	r.Any("/carriers/:id/rates", func(c *gin.Context) { h.proxy(c, "carrier") })
