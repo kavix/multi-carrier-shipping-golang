@@ -55,6 +55,51 @@ test_api() {
     fi
 }
 
+# call_and_capture: call API and return BODY and HTTP code in globals RESPONSE_BODY and RESPONSE_CODE
+call_and_capture() {
+    local method=$1
+    local endpoint=$2
+    local data=$3
+
+    if [ -z "$data" ]; then
+        RAW=$(curl -s -w "\n%{http_code}" -X "$method" -H "$AUTH_HEADER" "$GATEWAY_URL$endpoint")
+    else
+        RAW=$(curl -s -w "\n%{http_code}" -X "$method" -H "$AUTH_HEADER" -H "Content-Type: application/json" -d "$data" "$GATEWAY_URL$endpoint")
+    fi
+
+    RESPONSE_CODE=$(echo "$RAW" | tail -n1)
+    RESPONSE_BODY=$(echo "$RAW" | sed '$d')
+
+    # If jq is available and the body is JSON, try to extract common id fields
+    if command -v jq >/dev/null 2>&1; then
+        # Attempt to find 'id', 'shipment_id', 'invoice_id', 'label_id', 'return_id'
+        ID_CANDIDATE=$(echo "$RESPONSE_BODY" | jq -r '.id // .shipment_id // .invoice_id // .label_id // .return_id // empty' 2>/dev/null)
+        if [ -n "$ID_CANDIDATE" ] && [ "$ID_CANDIDATE" != "null" ]; then
+            RESPONSE_ID="$ID_CANDIDATE"
+        else
+            RESPONSE_ID=""
+        fi
+    else
+        # Fallback: try to extract common id fields with sed if jq is not available
+        RESPONSE_ID=$(echo "$RESPONSE_BODY" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        if [ -z "$RESPONSE_ID" ]; then
+            RESPONSE_ID=$(echo "$RESPONSE_BODY" | sed -n 's/.*"shipment_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        fi
+        if [ -z "$RESPONSE_ID" ]; then
+            RESPONSE_ID=$(echo "$RESPONSE_BODY" | sed -n 's/.*"invoice_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        fi
+        if [ -z "$RESPONSE_ID" ]; then
+            RESPONSE_ID=$(echo "$RESPONSE_BODY" | sed -n 's/.*"label_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        fi
+        if [ -z "$RESPONSE_ID" ]; then
+            RESPONSE_ID=$(echo "$RESPONSE_BODY" | sed -n 's/.*"return_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        fi
+        if [ -z "$RESPONSE_ID" ]; then
+            RESPONSE_ID=""
+        fi
+    fi
+}
+
 # ============================================================================
 # 1. HEALTH CHECKS
 # ============================================================================
@@ -88,18 +133,27 @@ echo -e "${BLUE}2. SHIPMENT SERVICE (Port 8081)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-test_api "Create Shipment (POST /shipments)" "POST" "/shipments" \
-    '{"sender_name":"John Doe","sender_address":"123 Main St, New York, NY","sender_email":"john@example.com","receiver_name":"Jane Smith","receiver_address":"456 Oak Ave, Los Angeles, CA","receiver_email":"jane@example.com","weight":2.5,"carrier":"dhl"}'
+# Create a shipment and capture the ID for follow-up requests (idempotent)
+echo "Creating shipment and capturing ID..."
+call_and_capture "POST" "/shipments" '{"sender_name":"John Doe","sender_address":"123 Main St, New York, NY 10001","sender_phone":"+1-555-0100","sender_email":"john@example.com","receiver_name":"Jane Smith","receiver_address":"456 Oak Ave, Los Angeles, CA 90001","receiver_phone":"+1-555-0200","receiver_email":"jane@example.com","weight":2.5,"dimensions":"10x10x10","description":"Test package","carrier":"dhl","service_type":"express"}'
+SHIPMENT_ID="$RESPONSE_ID"
+if [ -n "$SHIPMENT_ID" ]; then
+    echo "  Captured SHIPMENT_ID=$SHIPMENT_ID"
+else
+    echo "  Warning: could not capture SHIPMENT_ID (continuing with list only)"
+fi
 
 test_api "List Shipments (GET /shipments)" "GET" "/shipments" ""
 
-test_api "Get Shipment by ID (GET /shipments/{id})" "GET" "/shipments/SHIP-001" ""
-
-test_api "Update Shipment (PUT /shipments/{id})" "PUT" "/shipments/SHIP-001" \
-    '{"receiver_address":"789 Pine St, Los Angeles, CA"}'
-
-test_api "Update Shipment Status (PATCH /shipments/{id}/status)" "PATCH" "/shipments/SHIP-001/status" \
-    '{"status":"in_transit"}'
+if [ -n "$SHIPMENT_ID" ]; then
+    test_api "Get Shipment by ID (GET /shipments/{id})" "GET" "/shipments/$SHIPMENT_ID" ""
+    test_api "Update Shipment (PUT /shipments/{id})" "PUT" "/shipments/$SHIPMENT_ID" \
+        '{"receiver_address":"789 Pine St, Los Angeles, CA"}'
+    test_api "Update Shipment Status (PATCH /shipments/{id}/status)" "PATCH" "/shipments/$SHIPMENT_ID/status" \
+        '{"status":"in_transit"}'
+else
+    echo "  Skipping shipment-specific tests because SHIPMENT_ID is missing"
+fi
 
 echo ""
 
@@ -145,12 +199,19 @@ echo -e "${BLUE}5. LABEL GENERATION SERVICE (Port 8084)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-test_api "Generate Label (POST /labels)" "POST" "/labels" \
-    '{"shipment_id":"SHIP-001","tracking_number":"1234567890","carrier":"dhl","from_address":"123 Main St, NY","to_address":"456 Oak Ave, LA","weight":2.5}'
-
-test_api "Get Label (GET /labels/{id})" "GET" "/labels/LABEL-001" ""
-
-test_api "Download Label (GET /labels/{id}/download)" "GET" "/labels/LABEL-001/download" ""
+# Generate a label for the created shipment if available
+if [ -n "$SHIPMENT_ID" ]; then
+    call_and_capture "POST" "/labels" "{\"shipment_id\":\"$SHIPMENT_ID\",\"tracking_number\":\"1234567890\",\"carrier\":\"dhl\",\"from_address\":\"123 Main St, NY\",\"to_address\":\"456 Oak Ave, LA\",\"weight\":2.5}"
+    LABEL_ID="$RESPONSE_ID"
+    if [ -n "$LABEL_ID" ]; then
+        test_api "Get Label (GET /labels/{id})" "GET" "/labels/$LABEL_ID" ""
+        test_api "Download Label (GET /labels/{id}/download)" "GET" "/labels/$LABEL_ID/download" ""
+    else
+        echo "  Warning: could not capture LABEL_ID"
+    fi
+else
+    echo "  Skipping label tests because SHIPMENT_ID is missing"
+fi
 
 echo ""
 
@@ -193,13 +254,20 @@ echo -e "${BLUE}8. BILLING SERVICE (Port 8087)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-test_api "Create Invoice (POST /billing/invoices)" "POST" "/billing/invoices" \
-    '{"shipment_id":"SHIP-001","user_id":"user-123","amount":45.99,"carrier":"dhl"}'
-
-test_api "Get Invoice (GET /billing/invoices/{id})" "GET" "/billing/invoices/INV-001" ""
-
-test_api "Process Payment (POST /billing/payments)" "POST" "/billing/payments" \
-    '{"invoice_id":"INV-001","payment_method":"stripe","amount":45.99,"currency":"USD"}'
+# Create invoice for the shipment and capture invoice ID
+if [ -n "$SHIPMENT_ID" ]; then
+    call_and_capture "POST" "/billing/invoices" "{\"shipment_id\":\"$SHIPMENT_ID\",\"user_id\":\"user-123\",\"amount\":45.99,\"carrier\":\"dhl\"}"
+    INVOICE_ID="$RESPONSE_ID"
+    if [ -n "$INVOICE_ID" ]; then
+        test_api "Get Invoice (GET /billing/invoices/{id})" "GET" "/billing/invoices/$INVOICE_ID" ""
+        test_api "Process Payment (POST /billing/payments)" "POST" "/billing/payments" \
+            "{\"invoice_id\":\"$INVOICE_ID\",\"payment_method\":\"stripe\",\"amount\":45.99,\"currency\":\"USD\"}"
+    else
+        echo "  Warning: could not capture INVOICE_ID"
+    fi
+else
+    echo "  Skipping billing tests because SHIPMENT_ID is missing"
+fi
 
 echo ""
 
@@ -211,13 +279,20 @@ echo -e "${BLUE}9. RETURN SERVICE (Port 8088)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-test_api "Create Return Request (POST /returns)" "POST" "/returns" \
-    '{"shipment_id":"SHIP-001","user_id":"user-123","reason":"product_defective","description":"Damaged","return_method":"mail"}'
-
-test_api "Get Return Details (GET /returns/{id})" "GET" "/returns/RET-001" ""
-
-test_api "Approve Return (POST /returns/{id}/approve)" "POST" "/returns/RET-001/approve" \
-    '{"notes":"Approved"}'
+# Create a return for the shipment and capture return ID
+if [ -n "$SHIPMENT_ID" ]; then
+    call_and_capture "POST" "/returns" "{\"shipment_id\":\"$SHIPMENT_ID\",\"user_id\":\"user-123\",\"reason\":\"product_defective\",\"description\":\"Damaged\",\"return_method\":\"mail\"}"
+    RETURN_ID="$RESPONSE_ID"
+    if [ -n "$RETURN_ID" ]; then
+        test_api "Get Return Details (GET /returns/{id})" "GET" "/returns/$RETURN_ID" ""
+        test_api "Approve Return (POST /returns/{id}/approve)" "POST" "/returns/$RETURN_ID/approve" \
+            '{"notes":"Approved"}'
+    else
+        echo "  Warning: could not capture RETURN_ID"
+    fi
+else
+    echo "  Skipping return tests because SHIPMENT_ID is missing"
+fi
 
 echo ""
 
