@@ -2,10 +2,12 @@ package main
 
 import (
 	"database/sql"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/shipping/shared/pkg/kafka"
 	"github.com/shipping/shared/pkg/logger"
+	"github.com/shipping/shared/pkg/middleware"
 	"github.com/shipping/shipment-service/internal/config"
 	"github.com/shipping/shipment-service/internal/handler"
 	"github.com/shipping/shipment-service/internal/repository"
@@ -35,6 +37,13 @@ func main() {
 	h := handler.NewShipmentHandler(svc)
 
 	r := gin.Default()
+	// Extract user_id from headers set by API Gateway
+	r.Use(middleware.DownstreamContextMiddleware())
+
+	// Health endpoint for readiness checks
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "service": "shipment-service"})
+	})
 	h.Routes(r)
 
 	log.Info("shipment-service starting", logger.String("port", cfg.Port))

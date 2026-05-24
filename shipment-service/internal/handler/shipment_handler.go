@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/shipping/shipment-service/internal/service"
 )
@@ -15,7 +16,11 @@ func NewShipmentHandler(svc *service.ShipmentService) *ShipmentHandler {
 }
 
 func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userID, ok := c.Get("user_id")
+	if !ok || userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing user_id"})
+		return
+	}
 	var req service.CreateShipmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -40,7 +45,11 @@ func (h *ShipmentHandler) GetShipment(c *gin.Context) {
 }
 
 func (h *ShipmentHandler) ListShipments(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userID, ok := c.Get("user_id")
+	if !ok || userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing user_id"})
+		return
+	}
 	shipments, err := h.svc.ListUserShipments(c.Request.Context(), userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

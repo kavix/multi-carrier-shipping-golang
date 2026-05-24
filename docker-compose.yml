@@ -23,6 +23,12 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # PostgreSQL - One per service (Database-per-Service pattern)
   postgres-shipment:
@@ -35,6 +41,11 @@ services:
       - "5431:5432"
     volumes:
       - shipment-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-carrier:
     image: postgres:15-alpine
@@ -46,6 +57,11 @@ services:
       - "5432:5432"
     volumes:
       - carrier-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-rate:
     image: postgres:15-alpine
@@ -57,6 +73,11 @@ services:
       - "5433:5432"
     volumes:
       - rate-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-label:
     image: postgres:15-alpine
@@ -68,6 +89,11 @@ services:
       - "5434:5432"
     volumes:
       - label-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-tracking:
     image: postgres:15-alpine
@@ -79,6 +105,11 @@ services:
       - "5435:5432"
     volumes:
       - tracking-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-address:
     image: postgres:15-alpine
@@ -90,6 +121,11 @@ services:
       - "5436:5432"
     volumes:
       - address-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-billing:
     image: postgres:15-alpine
@@ -101,6 +137,11 @@ services:
       - "5437:5432"
     volumes:
       - billing-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-return:
     image: postgres:15-alpine
@@ -112,6 +153,11 @@ services:
       - "5438:5432"
     volumes:
       - return-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ==========================================
   # MICROSERVICES
@@ -122,7 +168,7 @@ services:
       context: .
       dockerfile: ./shipment-service/Dockerfile
     ports:
-      - "8081:8081"
+      - "8001:8081"
     environment:
       PORT: 8081
       DB_HOST: postgres-shipment
@@ -132,15 +178,23 @@ services:
       DB_NAME: shipments
       KAFKA_BROKERS: kafka:29092
     depends_on:
-      - postgres-shipment
-      - kafka
+      postgres-shipment:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   carrier-integration-service:
     build:
       context: .
       dockerfile: ./carrier-integration-service/Dockerfile
     ports:
-      - "8082:8082"
+      - "8002:8082"
     environment:
       PORT: 8082
       DB_HOST: postgres-carrier
@@ -149,14 +203,21 @@ services:
       DB_PASS: postgres
       DB_NAME: carriers
     depends_on:
-      - postgres-carrier
+      postgres-carrier:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   rate-comparison-service:
     build:
       context: .
       dockerfile: ./rate-comparison-service/Dockerfile
     ports:
-      - "8083:8083"
+      - "8003:8083"
     environment:
       PORT: 8083
       DB_HOST: postgres-rate
@@ -167,16 +228,25 @@ services:
       KAFKA_BROKERS: kafka:29092
       CARRIER_SERVICE_URL: http://carrier-integration-service:8082
     depends_on:
-      - postgres-rate
-      - kafka
-      - carrier-integration-service
+      postgres-rate:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      carrier-integration-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8083/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   label-generation-service:
     build:
       context: .
       dockerfile: ./label-generation-service/Dockerfile
     ports:
-      - "8084:8084"
+      - "8004:8084"
     environment:
       PORT: 8084
       DB_HOST: postgres-label
@@ -187,16 +257,25 @@ services:
       KAFKA_BROKERS: kafka:29092
       CARRIER_SERVICE_URL: http://carrier-integration-service:8082
     depends_on:
-      - postgres-label
-      - kafka
-      - carrier-integration-service
+      postgres-label:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      carrier-integration-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8084/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   tracking-service:
     build:
       context: .
       dockerfile: ./tracking-service/Dockerfile
     ports:
-      - "8085:8085"
+      - "8005:8085"
     environment:
       PORT: 8085
       DB_HOST: postgres-tracking
@@ -207,15 +286,23 @@ services:
       KAFKA_BROKERS: kafka:29092
       CARRIER_SERVICE_URL: http://carrier-integration-service:8082
     depends_on:
-      - postgres-tracking
-      - kafka
+      postgres-tracking:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8085/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   address-validation-service:
     build:
       context: .
       dockerfile: ./address-validation-service/Dockerfile
     ports:
-      - "8086:8086"
+      - "8006:8086"
     environment:
       PORT: 8086
       DB_HOST: postgres-address
@@ -226,15 +313,23 @@ services:
       KAFKA_BROKERS: kafka:29092
       CARRIER_SERVICE_URL: http://carrier-integration-service:8082
     depends_on:
-      - postgres-address
-      - kafka
+      postgres-address:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8086/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   billing-service:
     build:
       context: .
       dockerfile: ./billing-service/Dockerfile
     ports:
-      - "8087:8087"
+      - "8007:8087"
     environment:
       PORT: 8087
       DB_HOST: postgres-billing
@@ -244,15 +339,23 @@ services:
       DB_NAME: billing
       KAFKA_BROKERS: kafka:29092
     depends_on:
-      - postgres-billing
-      - kafka
+      postgres-billing:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8087/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   return-service:
     build:
       context: .
       dockerfile: ./return-service/Dockerfile
     ports:
-      - "8088:8088"
+      - "8008:8088"
     environment:
       PORT: 8088
       DB_HOST: postgres-return
@@ -263,9 +366,18 @@ services:
       KAFKA_BROKERS: kafka:29092
       LABEL_SERVICE_URL: http://label-generation-service:8084
     depends_on:
-      - postgres-return
-      - kafka
-      - label-generation-service
+      postgres-return:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      label-generation-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8088/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   notification-service:
     build:
@@ -273,8 +385,21 @@ services:
       dockerfile: ./notification-service/Dockerfile
     environment:
       KAFKA_BROKERS: kafka:29092
+      # SMTP (Yahoo)
+      SMTP_HOST: smtp.mail.yahoo.com
+      SMTP_PORT: "587"
+      SMTP_FROM: kavix@yahoo.com
+      SMTP_USER: kavix@yahoo.com
+      SMTP_PASSWORD: khmvdagcssmvudxg
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep '[s]ervice' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   api-gateway:
     build:
@@ -293,14 +418,32 @@ services:
       BILLING_SERVICE_URL: http://billing-service:8087
       RETURN_SERVICE_URL: http://return-service:8088
     depends_on:
-      - shipment-service
-      - carrier-integration-service
-      - rate-comparison-service
-      - label-generation-service
-      - tracking-service
-      - address-validation-service
-      - billing-service
-      - return-service
+      shipment-service:
+        condition: service_healthy
+      carrier-integration-service:
+        condition: service_healthy
+      rate-comparison-service:
+        condition: service_healthy
+      label-generation-service:
+        condition: service_healthy
+      tracking-service:
+        condition: service_healthy
+      address-validation-service:
+        condition: service_healthy
+      billing-service:
+        condition: service_healthy
+      return-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O- --header 'Authorization: Bearer test-token' http://localhost:8080/health | grep -q 'ok' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   shipment-db:

@@ -2,13 +2,15 @@ package main
 
 import (
 	"database/sql"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/carrier-integration-service/internal/config"
 	"github.com/shipping/carrier-integration-service/internal/handler"
 	"github.com/shipping/carrier-integration-service/internal/repository"
 	"github.com/shipping/carrier-integration-service/internal/service"
+	"github.com/shipping/shared/pkg/logger"
+	"github.com/shipping/shared/pkg/middleware"
 )
 
 func main() {
@@ -31,6 +33,13 @@ func main() {
 	h := handler.NewCarrierHandler(svc)
 
 	r := gin.Default()
+	// Extract user_id from headers set by API Gateway
+	r.Use(middleware.DownstreamContextMiddleware())
+
+	// Health endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "service": "carrier-integration-service"})
+	})
 	h.Routes(r)
 
 	log.Info("carrier-integration-service starting", logger.String("port", cfg.Port))
