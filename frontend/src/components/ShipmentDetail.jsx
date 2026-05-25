@@ -87,7 +87,18 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                         </div>
                         <div className="info-row">
                             <span className="label">Tracking Number:</span>
-                            <span className="value">{shipment.tracking_number || 'Not assigned'}</span>
+                            <span className="value">
+                                {shipment.tracking_number ? (
+                                    <a 
+                                        href={getTrackingUrl(shipment.carrier, shipment.tracking_number)} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="tracking-link"
+                                    >
+                                        {shipment.tracking_number} 🔗
+                                    </a>
+                                ) : 'Not assigned'}
+                            </span>
                         </div>
                         <div className="info-row">
                             <span className="label">Carrier:</span>
@@ -210,6 +221,26 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
             )}
         </div>
     )
+}
+
+function getTrackingUrl(carrier, trackingId) {
+    if (!trackingId) return '#'
+    
+    switch (carrier?.toLowerCase()) {
+        case 'dhl':
+            return `https://www.dhl.com/track?tracking-id=${trackingId}`
+        case 'fedex':
+            return `https://www.fedex.com/fedextrack/?trknbr=${trackingId}`
+        case 'ups':
+            return `https://www.ups.com/track?tracknum=${trackingId}`
+        case 'usps':
+            return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingId}`
+        case 'ems':
+        case 'slpost':
+            return `https://www.slpost.lk/track?tracking-id=${trackingId}`
+        default:
+            return '#'
+    }
 }
 
 function getStatusColor(status) {
