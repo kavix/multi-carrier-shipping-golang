@@ -1,0 +1,1 @@
+ALTER TABLE shipments ADD COLUMN IF NOT EXISTS label_url TEXT;

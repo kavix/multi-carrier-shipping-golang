@@ -108,10 +108,27 @@ func (h *CarrierHandler) GetDropLocations(c *gin.Context) {
 	c.JSON(http.StatusOK, locations)
 }
 
+func (h *CarrierHandler) ValidatePostalCode(c *gin.Context) {
+	carrierCode := c.Query("carrier")
+	countryCode := c.Query("country")
+	postalCode := c.Query("postal_code")
+	if carrierCode == "" || countryCode == "" || postalCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "carrier, country, and postal_code are required"})
+		return
+	}
+	valid, err := h.svc.ValidatePostalCode(c.Request.Context(), carrierCode, countryCode, postalCode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"valid": valid})
+}
+
 func (h *CarrierHandler) Routes(r *gin.Engine) {
 	r.POST("/carriers", h.RegisterCarrier)
 	r.GET("/carriers/rates", h.GetRates)
 	r.GET("/carriers/tracking", h.GetTracking)
 	r.GET("/carriers/pickup-locations", h.GetPickupLocations)
 	r.GET("/carriers/drop-locations", h.GetDropLocations)
+	r.GET("/carriers/validate-postal-code", h.ValidatePostalCode)
 }

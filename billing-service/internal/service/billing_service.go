@@ -13,12 +13,17 @@ import (
 )
 
 type BillingService struct {
-	repo     *repository.BillingRepo
-	producer *kafka.Producer
+	repo            *repository.BillingRepo
+	paymentProducer *kafka.Producer
+	invoiceProducer *kafka.Producer
 }
 
-func NewBillingService(repo *repository.BillingRepo, producer *kafka.Producer) *BillingService {
-	return &BillingService{repo: repo, producer: producer}
+func NewBillingService(repo *repository.BillingRepo, paymentProducer, invoiceProducer *kafka.Producer) *BillingService {
+	return &BillingService{
+		repo:            repo,
+		paymentProducer: paymentProducer,
+		invoiceProducer: invoiceProducer,
+	}
 }
 
 func (s *BillingService) CreateInvoice(ctx context.Context, shipmentID, userID string, amount float64, description string) (*domain.Invoice, error) {
@@ -46,7 +51,7 @@ func (s *BillingService) CreateInvoice(ctx context.Context, shipmentID, userID s
 		"status":      "pending",
 		"event_type":  "invoice.generated",
 	}
-	if err := s.producer.Publish(ctx, invoice.ID, event); err != nil {
+	if err := s.invoiceProducer.Publish(ctx, invoice.ID, event); err != nil {
 		logger.Error("failed to publish invoice.generated", logger.String("err", err.Error()))
 	}
 
@@ -93,7 +98,7 @@ func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method s
 		"status":      "completed",
 		"event_type":  "payment.processed",
 	}
-	if err := s.producer.Publish(ctx, payment.ID, event); err != nil {
+	if err := s.paymentProducer.Publish(ctx, payment.ID, event); err != nil {
 		logger.Error("failed to publish payment.processed", logger.String("err", err.Error()))
 	}
 

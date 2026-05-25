@@ -32,6 +32,8 @@ export default function ShipmentList({ onSelectShipment }) {
     const statusColor = (status) => {
         const colors = {
             pending: '#f59e0b',
+            validated: '#3b82f6',
+            created: '#10b981',
             processing: '#3b82f6',
             delivered: '#10b981',
             cancelled: '#ef4444',
@@ -45,9 +47,14 @@ export default function ShipmentList({ onSelectShipment }) {
         <div className="shipment-list">
             <div className="list-header">
                 <h1>Shipments</h1>
-                <button className="btn btn-primary" onClick={() => window.location.hash = '#create'}>
-                    + New Shipment
-                </button>
+                <div className="header-actions">
+                    <button className="btn btn-secondary" onClick={loadShipments}>
+                        🔄 Refresh
+                    </button>
+                    <button className="btn btn-primary" onClick={() => window.location.hash = '#create'}>
+                        + New Shipment
+                    </button>
+                </div>
             </div>
 
             {error && <div className="alert alert-error">{error}</div>}
@@ -79,6 +86,7 @@ export default function ShipmentList({ onSelectShipment }) {
                                 <th>Weight</th>
                                 <th>Carrier</th>
                                 <th>Status</th>
+                                <th>Label</th>
                                 <th>Created</th>
                                 <th>Action</th>
                             </tr>
@@ -95,6 +103,15 @@ export default function ShipmentList({ onSelectShipment }) {
                                         <span className="status-badge" style={{ backgroundColor: statusColor(shipment.status) }}>
                                             {shipment.status}
                                         </span>
+                                    </td>
+                                    <td>
+                                        {shipment.label_url ? (
+                                            <a href={shipment.label_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline">
+                                                View Label
+                                            </a>
+                                        ) : (
+                                            <span className="text-muted">None</span>
+                                        )}
                                     </td>
                                     <td className="text-muted">{new Date(shipment.created_at).toLocaleDateString()}</td>
                                     <td>

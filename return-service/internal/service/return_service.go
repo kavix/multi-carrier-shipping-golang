@@ -17,12 +17,48 @@ import (
 )
 
 type ReturnService struct {
-	repo     *repository.ReturnRepo
-	producer *kafka.Producer
+	repo               *repository.ReturnRepo
+	producer           *kafka.Producer
+	shipmentServiceURL string
 }
 
 func NewReturnService(repo *repository.ReturnRepo, producer *kafka.Producer) *ReturnService {
-	return &ReturnService{repo: repo, producer: producer}
+	return &ReturnService{
+		repo:               repo,
+		producer:           producer,
+		shipmentServiceURL: getEnv("SHIPMENT_SERVICE_URL", "http://shipment-service:8081"),
+	}
+}
+
+func (s *ReturnService) updateShipmentStatus(ctx context.Context, shipmentID, status string) error {
+	logger.Info("updating shipment status", logger.String("shipment_id", shipmentID), logger.String("status", status))
+
+	updateReq := map[string]string{"status": status}
+	jsonBody, err := json.Marshal(updateReq)
+	if err != nil {
+		return fmt.Errorf("marshal shipment status update: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/shipments/%s/status", s.shipmentServiceURL, shipmentID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("create shipment status update request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("send shipment status update request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("shipment service returned non-ok status: %d", resp.StatusCode)
+	}
+
+	logger.Info("shipment status updated successfully", logger.String("shipment_id", shipmentID), logger.String("status", status))
+	return nil
 }
 
 func (s *ReturnService) RequestReturn(ctx context.Context, userID, shipmentID, reason string) (*domain.ReturnRequest, error) {
@@ -42,6 +78,12 @@ func (s *ReturnService) RequestReturn(ctx context.Context, userID, shipmentID, r
 
 	if err := s.repo.Create(ctx, ret); err != nil {
 		return nil, fmt.Errorf("create return: %w", err)
+	}
+
+	// Update shipment status to "return requested"
+	if err := s.updateShipmentStatus(ctx, shipmentID, "return requested"); err != nil {
+		logger.Error("failed to update shipment status to 'return requested'", logger.String("shipment_id", shipmentID), logger.String("err", err.Error()))
+		// Continue processing even if shipment status update fails, but log the error
 	}
 
 	// Publish event
@@ -98,16 +140,23 @@ func (s *ReturnService) ApproveReturn(ctx context.Context, returnID, carrier str
 		return nil, err
 	}
 
+	// Update shipment status to "return approved"
+	if err := s.updateShipmentStatus(ctx, ret.ShipmentID, "return approved"); err != nil {
+		logger.Error("failed to update shipment status to 'return approved'", logger.String("shipment_id", ret.ShipmentID), logger.String("err", err.Error()))
+		// Continue processing even if shipment status update fails, but log the error
+	}
+
 	// Publish event
 	event := map[string]interface{}{
 		"return_id":   ret.ID,
 		"shipment_id": ret.ShipmentID,
+		"user_id":     ret.UserID,
 		"status":      ret.Status,
-		"carrier":     carrier,
-		"event_type":  "return.status.changed",
+		"carrier":     ret.Carrier,
+		"event_type":  "return.approved",
 	}
 	if err := s.producer.Publish(ctx, ret.ID, event); err != nil {
-		logger.Error("failed to publish return.status.changed", logger.String("err", err.Error()))
+		logger.Error("failed to publish return.approved", logger.String("err", err.Error()))
 	}
 
 	return ret, nil
@@ -153,6 +202,26 @@ func (s *ReturnService) GetReturn(ctx context.Context, id string) (*domain.Retur
 
 func (s *ReturnService) ListReturns(ctx context.Context, shipmentID string) ([]*domain.ReturnRequest, error) {
 	return s.repo.GetByShipmentID(ctx, shipmentID)
+}
+
+func (s *ReturnService) UpdateStatus(ctx context.Context, id, status string) error {
+	if err := s.repo.UpdateStatus(ctx, id, status); err != nil {
+		return err
+	}
+
+	// Publish status changed event
+	ret, err := s.repo.GetByID(ctx, id)
+	if err == nil {
+		event := map[string]interface{}{
+			"return_id":   ret.ID,
+			"shipment_id": ret.ShipmentID,
+			"status":      ret.Status,
+			"event_type":  "return.status.changed",
+		}
+		_ = s.producer.Publish(ctx, ret.ID, event)
+	}
+
+	return nil
 }
 
 func getEnv(key, defaultVal string) string {

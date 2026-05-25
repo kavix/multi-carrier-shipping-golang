@@ -6,14 +6,36 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
     const [trackingHistory, setTrackingHistory] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [isRefreshing, setIsRefreshing] = useState(false)
 
     useEffect(() => {
         loadDetails()
-    }, [shipmentId])
+
+        // Auto-refresh if shipment is not in a terminal state
+        const pollInterval = setInterval(() => {
+            if (shipment && (shipment.status === 'pending' || shipment.status === 'validated' || shipment.status === 'processing')) {
+                refreshData()
+            }
+        }, 3000)
+
+        return () => clearInterval(pollInterval)
+    }, [shipmentId, shipment?.status])
 
     const loadDetails = async () => {
         try {
             setLoading(true)
+            await refreshData()
+            setError(null)
+        } catch (err) {
+            setError(err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const refreshData = async () => {
+        try {
+            setIsRefreshing(true)
             const shipmentData = await shipments.get(shipmentId)
             setShipment(shipmentData)
 
@@ -21,14 +43,12 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                 const historyData = await tracking.getHistory(shipmentId)
                 setTrackingHistory(historyData || [])
             } catch (err) {
-                console.log('Tracking history not available')
+                // Tracking might not be available yet
             }
-
-            setError(null)
         } catch (err) {
-            setError(err.message)
+            console.error('Failed to refresh shipment data', err)
         } finally {
-            setLoading(false)
+            setIsRefreshing(false)
         }
     }
 
@@ -39,8 +59,14 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
     return (
         <div className="shipment-detail">
             <div className="detail-header">
-                <button className="btn btn-secondary" onClick={onBack}>← Back</button>
-                <h1>Shipment Details</h1>
+                <div className="header-left">
+                    <button className="btn btn-secondary" onClick={onBack}>← Back</button>
+                    <h1>Shipment Details</h1>
+                    {isRefreshing && <span className="refreshing-indicator">🔄 Updating...</span>}
+                </div>
+                <button className="btn btn-primary" onClick={refreshData} disabled={isRefreshing}>
+                    Refresh
+                </button>
             </div>
 
             <div className="detail-grid">
@@ -61,7 +87,18 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                         </div>
                         <div className="info-row">
                             <span className="label">Tracking Number:</span>
-                            <span className="value">{shipment.tracking_number || 'Not assigned'}</span>
+                            <span className="value">
+                                {shipment.tracking_number ? (
+                                    <a 
+                                        href={getTrackingUrl(shipment.carrier, shipment.tracking_number)} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="tracking-link"
+                                    >
+                                        {shipment.tracking_number} 🔗
+                                    </a>
+                                ) : 'Not assigned'}
+                            </span>
                         </div>
                         <div className="info-row">
                             <span className="label">Carrier:</span>
@@ -129,8 +166,40 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                             <span className="label">Created:</span>
                             <span className="value">{new Date(shipment.created_at).toLocaleString()}</span>
                         </div>
+                        {shipment.pickup_location_id && (
+                            <div className="info-row">
+                                <span className="label">Pickup Location:</span>
+                                <span className="value mono">{shipment.pickup_location_id}</span>
+                            </div>
+                        )}
+                        {shipment.drop_location_id && (
+                            <div className="info-row">
+                                <span className="label">Drop Location:</span>
+                                <span className="value mono">{shipment.drop_location_id}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
+
+                {shipment.label_url && (
+                    <div className="detail-section">
+                        <h2>Shipping Label</h2>
+                        <div className="info-group">
+                            <div className="info-row">
+                                <span className="label">Label ID:</span>
+                                <span className="value mono">{shipment.label_id}</span>
+                            </div>
+                            <div className="info-row">
+                                <span className="label">Label URL:</span>
+                                <span className="value">
+                                    <a href={shipment.label_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                                        Open PDF Label
+                                    </a>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {trackingHistory.length > 0 && (
@@ -154,9 +223,31 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
     )
 }
 
+function getTrackingUrl(carrier, trackingId) {
+    if (!trackingId) return '#'
+    
+    switch (carrier?.toLowerCase()) {
+        case 'dhl':
+            return `https://www.dhl.com/track?tracking-id=${trackingId}`
+        case 'fedex':
+            return `https://www.fedex.com/fedextrack/?trknbr=${trackingId}`
+        case 'ups':
+            return `https://www.ups.com/track?tracknum=${trackingId}`
+        case 'usps':
+            return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingId}`
+        case 'ems':
+        case 'slpost':
+            return `https://www.slpost.lk/track?tracking-id=${trackingId}`
+        default:
+            return '#'
+    }
+}
+
 function getStatusColor(status) {
     const colors = {
         pending: '#f59e0b',
+        validated: '#3b82f6',
+        created: '#10b981',
         processing: '#3b82f6',
         delivered: '#10b981',
         cancelled: '#ef4444',

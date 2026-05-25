@@ -177,11 +177,14 @@ services:
       DB_PASS: postgres
       DB_NAME: shipments
       KAFKA_BROKERS: kafka:29092
+      ADDRESS_SERVICE_URL: http://address-validation-service:8086
     depends_on:
       postgres-shipment:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      address-validation-service:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:8081/health || exit 1"]
       interval: 10s
@@ -256,6 +259,10 @@ services:
       DB_NAME: labels
       KAFKA_BROKERS: kafka:29092
       CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+      S3_BUCKET_ARN: ${S3_BUCKET_ARN:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     depends_on:
       postgres-label:
         condition: service_healthy
@@ -391,6 +398,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-test@example.com}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
     depends_on:
       kafka:
         condition: service_healthy
@@ -455,6 +463,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "9000:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      - kafka
 
 volumes:
   shipment-db:
