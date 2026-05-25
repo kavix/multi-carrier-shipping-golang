@@ -66,8 +66,8 @@ func (s *LabelService) GenerateLabel(ctx context.Context, details map[string]int
 	carrierServiceURL := getEnv("CARRIER_SERVICE_URL", "http://carrier-integration-service:8082")
 
 	// In production, this calls the carrier API to generate a real label
-	// For demo, we simulate label generation using Maroto
-	trackingNumber := fmt.Sprintf("TRACK-%s-%d", carrier, time.Now().Unix())
+	// For demo, we generate realistic tracking numbers based on carrier
+	trackingNumber := s.generateRealisticTrackingNumber(carrier)
 
 	// Generate PDF using Maroto
 	pdfData, err := s.generateMarotoPDF(details, trackingNumber)
@@ -207,6 +207,28 @@ func (s *LabelService) GenerateLabel(ctx context.Context, details map[string]int
 
 	logger.Info("label generation process completed", logger.String("shipment_id", shipmentID), logger.String("label_url", label.LabelURL))
 	return label, nil
+}
+
+func (s *LabelService) generateRealisticTrackingNumber(carrier string) string {
+	switch strings.ToLower(carrier) {
+	case "dhl":
+		// 10 digits
+		return utils.RandomDigits(10)
+	case "fedex":
+		// 12 digits
+		return utils.RandomDigits(12)
+	case "ups":
+		// 1Z + 16 alphanumeric
+		return "1Z" + utils.RandomAlphanumeric(16)
+	case "usps":
+		// 22 digits
+		return utils.RandomDigits(22)
+	case "ems", "slpost":
+		// EE + 8 digits + LK
+		return "EE" + utils.RandomDigits(8) + "LK"
+	default:
+		return fmt.Sprintf("TRACK-%s-%d", carrier, time.Now().Unix())
+	}
 }
 
 func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackingNumber string) ([]byte, error) {
