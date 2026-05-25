@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { shipments } from '../services/api'
+import React, { useState, useEffect } from 'react'
+import { shipments, carriers } from '../services/api'
 
 export default function CreateShipment({ onSuccess, onCancel }) {
     const [formData, setFormData] = useState({
@@ -13,9 +13,50 @@ export default function CreateShipment({ onSuccess, onCancel }) {
         dimensions: '',
         carrier: 'dhl',
         service_type: 'standard',
+        pickup_location_id: '',
+        drop_location_id: '',
     })
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
+    const [pickupLocations, setPickupLocations] = useState([])
+    const [dropLocations, setDropLocations] = useState([])
+    const [searchingLocations, setSearchingLocations] = useState(false)
+
+    useEffect(() => {
+        if (formData.carrier === 'fedex') {
+            fetchLocations()
+        } else {
+            setPickupLocations([])
+            setDropLocations([])
+        }
+    }, [formData.carrier, formData.sender_address, formData.receiver_address])
+
+    const fetchLocations = async () => {
+        if (formData.carrier !== 'fedex') return
+
+        try {
+            setSearchingLocations(true)
+
+            // Only fetch if addresses are provided
+            const promises = []
+            if (formData.sender_address) {
+                promises.push(carriers.getPickupLocations('fedex', formData.sender_address, 5)
+                    .then(locs => setPickupLocations(locs))
+                    .catch(e => console.error("Pickup fetch error", e)))
+            }
+            if (formData.receiver_address) {
+                promises.push(carriers.getDropLocations('fedex', formData.receiver_address, 5)
+                    .then(locs => setDropLocations(locs))
+                    .catch(e => console.error("Drop fetch error", e)))
+            }
+
+            await Promise.all(promises)
+        } catch (err) {
+            console.error("Error fetching Fedora locations", err)
+        } finally {
+            setSearchingLocations(false)
+        }
+    }
 
     const handleChange = (e) => {
         const { name, value } = e.target
@@ -195,6 +236,48 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                         </div>
                     </div>
                 </fieldset>
+
+                {formData.carrier === 'fedex' && (
+                    <fieldset className="fedex-locations">
+                        <legend>FedEx Locations</legend>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label htmlFor="pickup_location_id">Select Pickup Location (Optional)</label>
+                                <select
+                                    id="pickup_location_id"
+                                    name="pickup_location_id"
+                                    value={formData.pickup_location_id}
+                                    onChange={handleChange}
+                                >
+                                    <option value="">-- Use Sender Address --</option>
+                                    {pickupLocations.map(loc => (
+                                        <option key={loc.id} value={loc.id}>
+                                            {loc.name} ({loc.address}, {loc.city})
+                                        </option>
+                                    ))}
+                                </select>
+                                {searchingLocations && <small>Searching...</small>}
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="drop_location_id">Select Drop Location (Optional)</label>
+                                <select
+                                    id="drop_location_id"
+                                    name="drop_location_id"
+                                    value={formData.drop_location_id}
+                                    onChange={handleChange}
+                                >
+                                    <option value="">-- Deliver to Address --</option>
+                                    {dropLocations.map(loc => (
+                                        <option key={loc.id} value={loc.id}>
+                                            {loc.name} ({loc.address}, {loc.city})
+                                        </option>
+                                    ))}
+                                </select>
+                                {searchingLocations && <small>Searching...</small>}
+                            </div>
+                        </div>
+                    </fieldset>
+                )}
 
                 <div className="form-actions">
                     <button type="button" className="btn btn-secondary" onClick={onCancel}>

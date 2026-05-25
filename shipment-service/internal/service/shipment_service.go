@@ -38,23 +38,25 @@ func NewShipmentService(
 
 func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req *CreateShipmentRequest) (*domain.Shipment, error) {
 	shipment := &domain.Shipment{
-		ID:              utils.GenerateID(),
-		UserID:          userID,
-		SenderName:      req.SenderName,
-		SenderAddress:   req.SenderAddress,
-		SenderEmail:     req.SenderEmail,
-		ReceiverName:    req.ReceiverName,
-		ReceiverAddress: req.ReceiverAddress,
-		ReceiverEmail:   req.ReceiverEmail,
-		Weight:          req.Weight,
-		Dimensions:      req.Dimensions,
-		Carrier:         req.Carrier,
-		ServiceType:     req.ServiceType,
-		Status:          string(domain.StatusPending),
-		TrackingNumber:  "",
-		Cost:            0,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+		ID:               utils.GenerateID(),
+		UserID:           userID,
+		SenderName:       req.SenderName,
+		SenderAddress:    req.SenderAddress,
+		SenderEmail:      req.SenderEmail,
+		ReceiverName:     req.ReceiverName,
+		ReceiverAddress:  req.ReceiverAddress,
+		ReceiverEmail:    req.ReceiverEmail,
+		Weight:           req.Weight,
+		Dimensions:       req.Dimensions,
+		Carrier:          req.Carrier,
+		ServiceType:      req.ServiceType,
+		PickupLocationID: req.PickupLocationID,
+		DropLocationID:   req.DropLocationID,
+		Status:           string(domain.StatusPending),
+		TrackingNumber:   "",
+		Cost:             0,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	if err := s.repo.Create(ctx, shipment); err != nil {
@@ -63,19 +65,21 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 
 	// Publish event to Kafka
 	event := map[string]interface{}{
-		"shipment_id":    shipment.ID,
-		"user_id":        shipment.UserID,
-		"carrier":        shipment.Carrier,
-		"service_type":   shipment.ServiceType,
-		"status":         shipment.Status,
-		"sender_name":    shipment.SenderName,
-		"sender":         shipment.SenderAddress,
-		"receiver_name":  shipment.ReceiverName,
-		"receiver":       shipment.ReceiverAddress,
-		"sender_email":   shipment.SenderEmail,
-		"receiver_email": shipment.ReceiverEmail,
-		"weight":         shipment.Weight,
-		"event_type":     "shipment.created",
+		"shipment_id":        shipment.ID,
+		"user_id":            shipment.UserID,
+		"carrier":            shipment.Carrier,
+		"service_type":       shipment.ServiceType,
+		"status":             shipment.Status,
+		"sender_name":        shipment.SenderName,
+		"sender":             shipment.SenderAddress,
+		"receiver_name":      shipment.ReceiverName,
+		"receiver":           shipment.ReceiverAddress,
+		"sender_email":       shipment.SenderEmail,
+		"receiver_email":     shipment.ReceiverEmail,
+		"weight":             shipment.Weight,
+		"pickup_location_id": shipment.PickupLocationID,
+		"drop_location_id":   shipment.DropLocationID,
+		"event_type":         "shipment.created",
 	}
 	if err := s.createdProducer.Publish(ctx, shipment.ID, event); err != nil {
 		logger.Error("failed to publish shipment.created", logger.String("err", err.Error()))
@@ -201,16 +205,18 @@ func (s *ShipmentService) DeleteShipment(ctx context.Context, id string) error {
 }
 
 type CreateShipmentRequest struct {
-	SenderName      string  `json:"sender_name" binding:"required"`
-	SenderAddress   string  `json:"sender_address" binding:"required"`
-	SenderEmail     string  `json:"sender_email"`
-	ReceiverName    string  `json:"receiver_name" binding:"required"`
-	ReceiverAddress string  `json:"receiver_address" binding:"required"`
-	ReceiverEmail   string  `json:"receiver_email"`
-	Weight          float64 `json:"weight" binding:"required,gt=0"`
-	Dimensions      string  `json:"dimensions"`
-	Carrier         string  `json:"carrier" binding:"required"`
-	ServiceType     string  `json:"service_type" binding:"required"`
+	SenderName       string  `json:"sender_name" binding:"required"`
+	SenderAddress    string  `json:"sender_address" binding:"required"`
+	SenderEmail      string  `json:"sender_email"`
+	ReceiverName     string  `json:"receiver_name" binding:"required"`
+	ReceiverAddress  string  `json:"receiver_address" binding:"required"`
+	ReceiverEmail    string  `json:"receiver_email"`
+	Weight           float64 `json:"weight" binding:"required,gt=0"`
+	Dimensions       string  `json:"dimensions"`
+	Carrier          string  `json:"carrier" binding:"required"`
+	ServiceType      string  `json:"service_type" binding:"required"`
+	PickupLocationID string  `json:"pickup_location_id"`
+	DropLocationID   string  `json:"drop_location_id"`
 }
 
 type UpdateShipmentRequest struct {
