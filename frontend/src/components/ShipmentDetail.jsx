@@ -131,6 +131,26 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                         </div>
                     </div>
                 </div>
+
+                {shipment.label_url && (
+                    <div className="detail-section">
+                        <h2>Shipping Label</h2>
+                        <div className="info-group">
+                            <div className="info-row">
+                                <span className="label">Label ID:</span>
+                                <span className="value mono">{shipment.label_id}</span>
+                            </div>
+                            <div className="info-row">
+                                <span className="label">Label URL:</span>
+                                <span className="value">
+                                    <a href={shipment.label_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                                        Open PDF Label
+                                    </a>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {trackingHistory.length > 0 && (
@@ -157,6 +177,7 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
 function getStatusColor(status) {
     const colors = {
         pending: '#f59e0b',
+        created: '#10b981',
         processing: '#3b82f6',
         delivered: '#10b981',
         cancelled: '#ef4444',

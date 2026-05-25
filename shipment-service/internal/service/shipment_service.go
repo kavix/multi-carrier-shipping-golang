@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/shipping/shipment-service/internal/domain"
-	"github.com/shipping/shipment-service/internal/repository"
 	"github.com/shipping/shared/pkg/kafka"
 	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/shared/pkg/utils"
+	"github.com/shipping/shipment-service/internal/domain"
+	"github.com/shipping/shipment-service/internal/repository"
 )
 
 type ShipmentService struct {
@@ -66,8 +66,11 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 		"shipment_id":    shipment.ID,
 		"user_id":        shipment.UserID,
 		"carrier":        shipment.Carrier,
+		"service_type":   shipment.ServiceType,
 		"status":         shipment.Status,
+		"sender_name":    shipment.SenderName,
 		"sender":         shipment.SenderAddress,
+		"receiver_name":  shipment.ReceiverName,
 		"receiver":       shipment.ReceiverAddress,
 		"sender_email":   shipment.SenderEmail,
 		"receiver_email": shipment.ReceiverEmail,
