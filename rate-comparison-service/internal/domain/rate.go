@@ -13,7 +13,7 @@ type RateComparison struct {
 	BestService   string    `json:"best_service" db:"best_service"`
 	BestCost      float64   `json:"best_cost" db:"best_cost"`
 	BestDays      int       `json:"best_days" db:"best_days"`
-	AllRatesJSON  string    `json:"-" db:"all_rates_json"`
+	AllRatesJSON  string    `json:"all_rates_json" db:"all_rates_json"`
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 

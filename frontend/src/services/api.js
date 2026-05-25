@@ -89,5 +89,7 @@ export const billing = {
 export const returns = {
     create: (payload) => apiCall('POST', '/returns', payload),
     get: (id) => apiCall('GET', `/returns/${id}`),
-    approve: (id) => apiCall('POST', `/returns/${id}/approve`),
+    approve: (id, carrier) => apiCall('POST', `/returns/${id}/approve`, { carrier }),
+    refund: (id, amount) => apiCall('POST', `/returns/${id}/refund`, { amount }),
+    list: (shipmentId) => apiCall('GET', `/returns?shipment_id=${shipmentId}`),
 }

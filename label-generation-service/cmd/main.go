@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/shipping/label-generation-service/internal/config"
+	"github.com/shipping/label-generation-service/internal/consumer"
 	"github.com/shipping/label-generation-service/internal/handler"
 	"github.com/shipping/label-generation-service/internal/repository"
 	"github.com/shipping/label-generation-service/internal/service"
@@ -33,8 +35,12 @@ func main() {
 	defer producer.Close()
 
 	repo := repository.NewLabelRepo(db)
-	svc := service.NewLabelService(repo, producer)
+	svc := service.NewLabelService(repo, producer, cfg)
 	h := handler.NewLabelHandler(svc)
+
+	// Start shipment consumer
+	shipmentConsumer := consumer.NewShipmentConsumer(cfg.KafkaBrokers, svc)
+	go shipmentConsumer.Start(context.Background())
 
 	r := gin.Default()
 	r.Use(middleware.DownstreamContextMiddleware())

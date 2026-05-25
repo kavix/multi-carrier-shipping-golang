@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/shipping/label-generation-service/internal/service"
 )
@@ -23,7 +24,11 @@ func (h *LabelHandler) GenerateLabel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	label, err := h.svc.GenerateLabel(c.Request.Context(), req.ShipmentID, req.Carrier)
+	details := map[string]interface{}{
+		"shipment_id": req.ShipmentID,
+		"carrier":     req.Carrier,
+	}
+	label, err := h.svc.GenerateLabel(c.Request.Context(), details)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

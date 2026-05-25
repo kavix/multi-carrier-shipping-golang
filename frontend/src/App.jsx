@@ -6,6 +6,8 @@ import CreateShipment from './components/CreateShipment'
 import Settings from './components/Settings'
 import ApiForm from './components/ApiForm'
 import StatusManager from './components/StatusManager'
+import RateComparison from './components/RateComparison'
+import ReturnManager from './components/ReturnManager'
 
 const DEFAULT_API = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const DEFAULT_TOKEN = 'Bearer test-token'
@@ -38,6 +40,10 @@ export default function App() {
         return <CreateShipment onSuccess={handleCreateSuccess} onCancel={() => setView('list')} />
       case 'status-manager':
         return <StatusManager />
+      case 'rate-comparison':
+        return <RateComparison />
+      case 'returns':
+        return <ReturnManager />
       case 'settings':
         return <Settings baseUrl={baseUrl} onBaseUrlChange={setBaseUrl} token={token} onTokenChange={setToken} />
       case 'api-test':
@@ -85,6 +91,22 @@ export default function App() {
               onClick={() => setView('status-manager')}
             >
               🛠️ Status Manager
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item ${view === 'rate-comparison' ? 'active' : ''}`}
+              onClick={() => setView('rate-comparison')}
+            >
+              📊 Rate Comparison
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item ${view === 'returns' ? 'active' : ''}`}
+              onClick={() => setView('returns')}
+            >
+              ↩️ Returns
             </button>
           </li>
           <li>

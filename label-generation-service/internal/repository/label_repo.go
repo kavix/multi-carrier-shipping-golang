@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/shipping/label-generation-service/internal/domain"
 )
 
@@ -39,4 +40,13 @@ func (r *LabelRepo) GetByShipmentID(ctx context.Context, shipmentID string) (*do
 		return nil, fmt.Errorf("get label: %w", err)
 	}
 	return &l, nil
+}
+
+func (r *LabelRepo) UpdateLabelURL(ctx context.Context, id, url string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE labels SET label_url = $1 WHERE id = $2`, url, id)
+	if err != nil {
+		return fmt.Errorf("update label url: %w", err)
+	}
+	return nil
 }

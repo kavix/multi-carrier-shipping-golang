@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +10,7 @@ import (
 	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/shared/pkg/middleware"
 	"github.com/shipping/shipment-service/internal/config"
+	"github.com/shipping/shipment-service/internal/consumer"
 	"github.com/shipping/shipment-service/internal/handler"
 	"github.com/shipping/shipment-service/internal/repository"
 	"github.com/shipping/shipment-service/internal/service"
@@ -44,6 +46,10 @@ func main() {
 	repo := repository.NewShipmentRepo(db)
 	svc := service.NewShipmentService(repo, createdProducer, updatedProducer, statusProducer, deletedProducer)
 	h := handler.NewShipmentHandler(svc)
+
+	// Start label consumer to update shipment with label link
+	labelConsumer := consumer.NewLabelConsumer(cfg.KafkaBrokers, repo)
+	go labelConsumer.Start(context.Background())
 
 	r := gin.Default()
 	// Extract user_id from headers set by API Gateway

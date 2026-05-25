@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/shipping/notification-service/internal/service"
 	"github.com/shipping/shared/pkg/kafka"
@@ -94,7 +95,7 @@ func (c *NotificationConsumer) HandleShipmentStatusChanged(ctx context.Context, 
 		return fmt.Errorf("unmarshal status event: %w", err)
 	}
 
-	logger.Info("notification: status changed", 
+	logger.Info("notification: status changed",
 		logger.String("shipment_id", event.ShipmentID),
 		logger.String("status", event.Status))
 
@@ -114,24 +115,45 @@ Thank you!
 `, event.ShipmentID, event.Status, event.Carrier, event.ShipmentID)
 
 	var errs []error
+
+	// Send email for "return" status with special message
+	if strings.EqualFold(event.Status, "return") {
+		logger.Info("sending return notification email")
+		subject = "Shipment Return Initiated - " + event.ShipmentID
+		body = fmt.Sprintf(`
+Hello,
+
+Your shipment with ID %s has initiated a return.
+
+Details:
+Shipment ID: %s
+Status: %s
+Reason: (if provided by return service)
+
+We will keep you updated on the return process.
+
+Thank you for using our service!
+		`, event.ShipmentID, event.ShipmentID, event.Status)
+	}
+
 	if event.SenderEmail != "" {
 		if err := c.service.SendEmail(event.SenderEmail, subject, body); err != nil {
-			errs = append(errs, fmt.Errorf("send status changed email to sender (%s): %w", event.SenderEmail, err))
+			errs = append(errs, fmt.Errorf("send status email to sender (%s): %w", event.SenderEmail, err))
 		}
 	} else {
 		if err := c.service.SendEmail(event.UserID+"@example.com", subject, body); err != nil {
-			errs = append(errs, fmt.Errorf("send status changed email to fallback sender: %w", err))
+			errs = append(errs, fmt.Errorf("send status email to fallback sender: %w", err))
 		}
 	}
 
 	if event.ReceiverEmail != "" {
 		if err := c.service.SendEmail(event.ReceiverEmail, subject, body); err != nil {
-			errs = append(errs, fmt.Errorf("send status changed email to receiver (%s): %w", event.ReceiverEmail, err))
+			errs = append(errs, fmt.Errorf("send status email to receiver (%s): %w", event.ReceiverEmail, err))
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("status changed notification errors: %v", errs)
+		return fmt.Errorf("status notification errors: %v", errs)
 	}
 	return nil
 }

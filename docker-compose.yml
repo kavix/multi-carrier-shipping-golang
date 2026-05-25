@@ -256,6 +256,10 @@ services:
       DB_NAME: labels
       KAFKA_BROKERS: kafka:29092
       CARRIER_SERVICE_URL: http://carrier-integration-service:8082
+      S3_BUCKET_ARN: ${S3_BUCKET_ARN:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     depends_on:
       postgres-label:
         condition: service_healthy
@@ -456,6 +460,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "9000:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      - kafka
 
 volumes:
   shipment-db:

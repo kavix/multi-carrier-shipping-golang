@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/shipping/shipment-service/internal/domain"
 )
 
@@ -18,10 +19,10 @@ func NewShipmentRepo(db *sql.DB) *ShipmentRepo {
 func (r *ShipmentRepo) Create(ctx context.Context, s *domain.Shipment) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO shipments (id, user_id, sender_name, sender_address, sender_email, receiver_name, receiver_address, receiver_email, 
-		weight, dimensions, carrier, service_type, status, tracking_number, cost, created_at, updated_at) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		weight, dimensions, carrier, service_type, status, tracking_number, label_id, label_url, cost, created_at, updated_at) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
 		s.ID, s.UserID, s.SenderName, s.SenderAddress, s.SenderEmail, s.ReceiverName, s.ReceiverAddress, s.ReceiverEmail,
-		s.Weight, s.Dimensions, s.Carrier, s.ServiceType, s.Status, s.TrackingNumber, s.Cost, s.CreatedAt, s.UpdatedAt)
+		s.Weight, s.Dimensions, s.Carrier, s.ServiceType, s.Status, s.TrackingNumber, s.LabelID, s.LabelURL, s.Cost, s.CreatedAt, s.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("create shipment: %w", err)
 	}
@@ -31,11 +32,11 @@ func (r *ShipmentRepo) Create(ctx context.Context, s *domain.Shipment) error {
 func (r *ShipmentRepo) GetByID(ctx context.Context, id string) (*domain.Shipment, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, sender_name, sender_address, sender_email, receiver_name, receiver_address, receiver_email, 
-		weight, dimensions, carrier, service_type, status, tracking_number, cost, created_at, updated_at 
+		weight, dimensions, carrier, service_type, status, tracking_number, label_id, label_url, cost, created_at, updated_at 
 		FROM shipments WHERE id = $1`, id)
 	var s domain.Shipment
 	err := row.Scan(&s.ID, &s.UserID, &s.SenderName, &s.SenderAddress, &s.SenderEmail, &s.ReceiverName, &s.ReceiverAddress, &s.ReceiverEmail,
-		&s.Weight, &s.Dimensions, &s.Carrier, &s.ServiceType, &s.Status, &s.TrackingNumber, &s.Cost, &s.CreatedAt, &s.UpdatedAt)
+		&s.Weight, &s.Dimensions, &s.Carrier, &s.ServiceType, &s.Status, &s.TrackingNumber, &s.LabelID, &s.LabelURL, &s.Cost, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("shipment not found")
@@ -48,7 +49,7 @@ func (r *ShipmentRepo) GetByID(ctx context.Context, id string) (*domain.Shipment
 func (r *ShipmentRepo) GetByUserID(ctx context.Context, userID string) ([]*domain.Shipment, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, user_id, sender_name, sender_address, sender_email, receiver_name, receiver_address, receiver_email, 
-		weight, dimensions, carrier, service_type, status, tracking_number, cost, created_at, updated_at 
+		weight, dimensions, carrier, service_type, status, tracking_number, label_id, label_url, cost, created_at, updated_at 
 		FROM shipments WHERE user_id = $1 ORDER BY created_at DESC`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list shipments: %w", err)
@@ -59,7 +60,7 @@ func (r *ShipmentRepo) GetByUserID(ctx context.Context, userID string) ([]*domai
 	for rows.Next() {
 		var s domain.Shipment
 		if err := rows.Scan(&s.ID, &s.UserID, &s.SenderName, &s.SenderAddress, &s.SenderEmail, &s.ReceiverName, &s.ReceiverAddress, &s.ReceiverEmail,
-			&s.Weight, &s.Dimensions, &s.Carrier, &s.ServiceType, &s.Status, &s.TrackingNumber, &s.Cost, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			&s.Weight, &s.Dimensions, &s.Carrier, &s.ServiceType, &s.Status, &s.TrackingNumber, &s.LabelID, &s.LabelURL, &s.Cost, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			continue
 		}
 		shipments = append(shipments, &s)
@@ -70,10 +71,10 @@ func (r *ShipmentRepo) GetByUserID(ctx context.Context, userID string) ([]*domai
 func (r *ShipmentRepo) Update(ctx context.Context, s *domain.Shipment) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE shipments SET sender_name=$1, sender_address=$2, sender_email=$3, receiver_name=$4, receiver_address=$5, receiver_email=$6,
-		weight=$7, dimensions=$8, carrier=$9, service_type=$10, status=$11, tracking_number=$12, cost=$13, updated_at=$14 
-		WHERE id=$15`,
+		weight=$7, dimensions=$8, carrier=$9, service_type=$10, status=$11, tracking_number=$12, label_id=$13, label_url=$14, cost=$15, updated_at=$16 
+		WHERE id=$17`,
 		s.SenderName, s.SenderAddress, s.SenderEmail, s.ReceiverName, s.ReceiverAddress, s.ReceiverEmail,
-		s.Weight, s.Dimensions, s.Carrier, s.ServiceType, s.Status, s.TrackingNumber, s.Cost, s.UpdatedAt, s.ID)
+		s.Weight, s.Dimensions, s.Carrier, s.ServiceType, s.Status, s.TrackingNumber, s.LabelID, s.LabelURL, s.Cost, s.UpdatedAt, s.ID)
 	if err != nil {
 		return fmt.Errorf("update shipment: %w", err)
 	}
@@ -85,6 +86,15 @@ func (r *ShipmentRepo) UpdateStatus(ctx context.Context, id, status string) erro
 		`UPDATE shipments SET status=$1, updated_at=NOW() WHERE id=$2`, status, id)
 	if err != nil {
 		return fmt.Errorf("update status: %w", err)
+	}
+	return nil
+}
+
+func (r *ShipmentRepo) UpdateLabelURL(ctx context.Context, id, labelID, labelURL string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE shipments SET label_id=$1, label_url=$2, status='created', updated_at=NOW() WHERE id=$3`, labelID, labelURL, id)
+	if err != nil {
+		return fmt.Errorf("update label url: %w", err)
 	}
 	return nil
 }
