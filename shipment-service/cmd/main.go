@@ -51,6 +51,10 @@ func main() {
 	labelConsumer := consumer.NewLabelConsumer(cfg.KafkaBrokers, repo)
 	go labelConsumer.Start(context.Background())
 
+	// Start address consumer to update shipment status after validation
+	addressConsumer := consumer.NewAddressConsumer(cfg.KafkaBrokers, repo)
+	go addressConsumer.Start(context.Background())
+
 	r := gin.Default()
 	// Extract user_id from headers set by API Gateway
 	r.Use(middleware.DownstreamContextMiddleware())

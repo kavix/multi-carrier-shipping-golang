@@ -32,6 +32,7 @@ export default function ShipmentList({ onSelectShipment }) {
     const statusColor = (status) => {
         const colors = {
             pending: '#f59e0b',
+            validated: '#3b82f6',
             created: '#10b981',
             processing: '#3b82f6',
             delivered: '#10b981',
@@ -46,9 +47,14 @@ export default function ShipmentList({ onSelectShipment }) {
         <div className="shipment-list">
             <div className="list-header">
                 <h1>Shipments</h1>
-                <button className="btn btn-primary" onClick={() => window.location.hash = '#create'}>
-                    + New Shipment
-                </button>
+                <div className="header-actions">
+                    <button className="btn btn-secondary" onClick={loadShipments}>
+                        🔄 Refresh
+                    </button>
+                    <button className="btn btn-primary" onClick={() => window.location.hash = '#create'}>
+                        + New Shipment
+                    </button>
+                </div>
             </div>
 
             {error && <div className="alert alert-error">{error}</div>}

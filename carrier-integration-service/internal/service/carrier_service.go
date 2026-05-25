@@ -92,3 +92,15 @@ func (s *CarrierService) GetDropLocations(ctx context.Context, carrierCode, addr
 	}
 	return c.GetDropLocations(address, limit)
 }
+
+func (s *CarrierService) ValidatePostalCode(ctx context.Context, carrierCode, countryCode, postalCode string) (bool, error) {
+	carrier, err := s.repo.GetByCode(ctx, carrierCode)
+	if err != nil {
+		return false, err
+	}
+	c, err := client.CarrierClientFactory(carrier)
+	if err != nil {
+		return false, err
+	}
+	return c.ValidatePostalCode(countryCode, postalCode)
+}

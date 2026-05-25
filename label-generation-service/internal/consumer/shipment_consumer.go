@@ -16,7 +16,7 @@ type ShipmentConsumer struct {
 
 func NewShipmentConsumer(brokers []string, svc *service.LabelService) *ShipmentConsumer {
 	sc := &ShipmentConsumer{svc: svc}
-	c := kafka.NewConsumer(brokers, kafka.TopicShipmentCreated, "label-generation-group", sc.handle)
+	c := kafka.NewConsumer(brokers, kafka.TopicShipmentAddressValidated, "label-generation-group", sc.handle)
 	sc.consumer = c
 	return sc
 }
@@ -40,7 +40,7 @@ func (c *ShipmentConsumer) handle(ctx context.Context, key string, payload json.
 		return nil
 	}
 
-	logger.Info("shipment created event received, generating label", logger.String("shipment_id", shipmentID))
+	logger.Info("shipment address validated event received, generating label", logger.String("shipment_id", shipmentID))
 
 	// Automatically generate label
 	_, err := c.svc.GenerateLabel(ctx, event)
