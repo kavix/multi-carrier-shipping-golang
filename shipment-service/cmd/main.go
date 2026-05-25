@@ -9,6 +9,7 @@ import (
 	"github.com/shipping/shared/pkg/kafka"
 	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/shared/pkg/middleware"
+	"github.com/shipping/shared/pkg/utils"
 	"github.com/shipping/shipment-service/internal/config"
 	"github.com/shipping/shipment-service/internal/consumer"
 	"github.com/shipping/shipment-service/internal/handler"
@@ -29,6 +30,11 @@ func main() {
 	defer db.Close()
 	if err := db.Ping(); err != nil {
 		log.Fatal("db ping", logger.String("err", err.Error()))
+	}
+
+	// Initialize database schema
+	if err := utils.InitDB(db, "migrations"); err != nil {
+		log.Fatal("db init", logger.String("err", err.Error()))
 	}
 
 	createdProducer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentCreated)
@@ -54,6 +60,10 @@ func main() {
 	// Start address consumer to update shipment status after validation
 	addressConsumer := consumer.NewAddressConsumer(cfg.KafkaBrokers, repo)
 	go addressConsumer.Start(context.Background())
+
+	// Start invoice consumer to update shipment cost
+	invoiceConsumer := consumer.NewInvoiceConsumer(cfg.KafkaBrokers, repo)
+	go invoiceConsumer.Start(context.Background())
 
 	r := gin.Default()
 	// Extract user_id from headers set by API Gateway

@@ -14,6 +14,7 @@ import (
 	"github.com/shipping/shared/pkg/kafka"
 	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/shared/pkg/middleware"
+	"github.com/shipping/shared/pkg/utils"
 )
 
 func main() {
@@ -29,6 +30,11 @@ func main() {
 	defer db.Close()
 	if err := db.Ping(); err != nil {
 		log.Fatal("db ping", logger.String("err", err.Error()))
+	}
+
+	// Initialize database schema
+	if err := utils.InitDB(db, "migrations"); err != nil {
+		log.Fatal("db init", logger.String("err", err.Error()))
 	}
 
 	producer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicLabelGenerated)
