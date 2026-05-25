@@ -155,6 +155,18 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                             <span className="label">Created:</span>
                             <span className="value">{new Date(shipment.created_at).toLocaleString()}</span>
                         </div>
+                        {shipment.pickup_location_id && (
+                            <div className="info-row">
+                                <span className="label">Pickup Location:</span>
+                                <span className="value mono">{shipment.pickup_location_id}</span>
+                            </div>
+                        )}
+                        {shipment.drop_location_id && (
+                            <div className="info-row">
+                                <span className="label">Drop Location:</span>
+                                <span className="value mono">{shipment.drop_location_id}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 

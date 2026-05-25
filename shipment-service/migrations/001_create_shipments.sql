@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS shipments (
     service_type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     tracking_number VARCHAR(100),
+    label_id VARCHAR(36),
     label_url TEXT,
     cost DECIMAL(10,2) DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),

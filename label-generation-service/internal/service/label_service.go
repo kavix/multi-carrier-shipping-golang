@@ -6,10 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -46,6 +49,17 @@ func (s *LabelService) GenerateLabel(ctx context.Context, details map[string]int
 
 	if shipmentID == "" {
 		return nil, fmt.Errorf("missing shipment_id in details")
+	}
+
+	// Enrich event with a FedEx rate if this shipment uses FedEx
+	if strings.EqualFold(carrier, "fedex") {
+		if rateCost, rateCurrency, rateService, err := s.lookupFedExRate(ctx, details); err == nil {
+			details["rate_cost"] = rateCost
+			details["rate_currency"] = rateCurrency
+			details["rate_service"] = rateService
+		} else {
+			logger.Error("failed to lookup fedex rate", logger.String("shipment_id", shipmentID), logger.String("err", err.Error()))
+		}
 	}
 
 	// Call carrier integration service to generate label
@@ -207,6 +221,11 @@ func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackin
 	receiverAddr, _ := details["receiver"].(string)
 	weight, _ := details["weight"].(float64)
 	serviceType, _ := details["service_type"].(string)
+	rateCost, _ := details["rate_cost"].(float64)
+	rateCurrency, _ := details["rate_currency"].(string)
+	rateServiceLabel, _ := details["rate_service"].(string)
+	pickupLocID, _ := details["pickup_location_id"].(string)
+	dropLocID, _ := details["drop_location_id"].(string)
 
 	// Use validated addresses if available
 	if sv, ok := details["sender_validated"].(map[string]interface{}); ok && sv["is_valid"] == true {
@@ -269,6 +288,36 @@ func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackin
 		})
 	})
 
+	if rateCost > 0 {
+		m.Row(20, func() {
+			m.Col(6, func() {
+				m.Text(fmt.Sprintf("RATE: %.2f %s", rateCost, rateCurrency), props.Text{Size: 10, Style: consts.Bold})
+			})
+			m.Col(6, func() {
+				label := "FedEx Rate"
+				if rateServiceLabel != "" {
+					label = rateServiceLabel
+				}
+				m.Text(label, props.Text{Size: 8})
+			})
+		})
+	}
+
+	if pickupLocID != "" || dropLocID != "" {
+		m.Row(20, func() {
+			if pickupLocID != "" {
+				m.Col(6, func() {
+					m.Text(fmt.Sprintf("PICKUP AT: %s", pickupLocID), props.Text{Size: 8, Style: consts.Bold})
+				})
+			}
+			if dropLocID != "" {
+				m.Col(6, func() {
+					m.Text(fmt.Sprintf("DROP OFF AT: %s", dropLocID), props.Text{Size: 8, Style: consts.Bold})
+				})
+			}
+		})
+	}
+
 	m.Row(30, func() {
 		m.Col(12, func() {
 			m.Barcode(trackingNumber, props.Barcode{
@@ -289,6 +338,86 @@ func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackin
 	}
 
 	return buf.Bytes(), nil
+}
+
+func (s *LabelService) lookupFedExRate(ctx context.Context, details map[string]interface{}) (float64, string, string, error) {
+	senderAddr, _ := details["sender"].(string)
+	receiverAddr, _ := details["receiver"].(string)
+	weight, _ := details["weight"].(float64)
+	requestedServiceType, _ := details["service_type"].(string)
+
+	carrierServiceURL := getEnv("CARRIER_SERVICE_URL", "http://carrier-integration-service:8082")
+	from := extractPostalCode(senderAddr)
+	to := extractPostalCode(receiverAddr)
+	if from == "" {
+		from = senderAddr
+	}
+	if to == "" {
+		to = receiverAddr
+	}
+
+	rateURL := fmt.Sprintf("%s/carriers/rates?from=%s&to=%s&weight=%.2f",
+		carrierServiceURL,
+		url.QueryEscape(from),
+		url.QueryEscape(to),
+		weight,
+	)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", rateURL, nil)
+	if err != nil {
+		return 0, "", "", err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return 0, "", "", fmt.Errorf("rate endpoint returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	type rateResult struct {
+		CarrierID     string  `json:"carrier_id"`
+		CarrierName   string  `json:"carrier_name"`
+		ServiceType   string  `json:"service_type"`
+		Currency      string  `json:"currency"`
+		Cost          float64 `json:"cost"`
+		EstimatedDays int     `json:"estimated_days"`
+	}
+	var rates []rateResult
+	if err := json.NewDecoder(resp.Body).Decode(&rates); err != nil {
+		return 0, "", "", err
+	}
+
+	var selected *rateResult
+	for _, r := range rates {
+		if !strings.EqualFold(r.CarrierName, "FedEx") && !strings.EqualFold(r.CarrierID, "fedex") {
+			continue
+		}
+		if selected == nil || r.Cost < selected.Cost {
+			selected = &r
+		}
+		if requestedServiceType != "" && strings.Contains(strings.ToLower(r.ServiceType), strings.ToLower(requestedServiceType)) {
+			selected = &r
+			break
+		}
+	}
+
+	if selected == nil {
+		return 0, "", "", fmt.Errorf("no FedEx rate found")
+	}
+
+	return selected.Cost, selected.Currency, selected.ServiceType, nil
+}
+
+var postalCodeRegex = regexp.MustCompile(`\b\d{5}(?:-\d{4})?\b`)
+
+func extractPostalCode(address string) string {
+	return postalCodeRegex.FindString(address)
 }
 
 func (s *LabelService) GetLabel(ctx context.Context, shipmentID string) (*domain.ShippingLabel, error) {
