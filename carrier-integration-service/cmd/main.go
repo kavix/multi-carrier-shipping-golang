@@ -11,6 +11,7 @@ import (
 	"github.com/shipping/carrier-integration-service/internal/service"
 	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/shared/pkg/middleware"
+	"github.com/shipping/shared/pkg/utils"
 )
 
 func main() {
@@ -26,6 +27,11 @@ func main() {
 	defer db.Close()
 	if err := db.Ping(); err != nil {
 		log.Fatal("db ping", logger.String("err", err.Error()))
+	}
+
+	// Initialize database schema
+	if err := utils.InitDB(db, "migrations"); err != nil {
+		log.Fatal("db init", logger.String("err", err.Error()))
 	}
 
 	repo := repository.NewCarrierRepo(db)

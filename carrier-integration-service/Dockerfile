@@ -27,5 +27,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.18
 RUN apk --no-cache add ca-certificates tzdata
 COPY --from=builder /bin/service /bin/service
+COPY --from=builder /src/carrier-integration-service/migrations ./migrations
 EXPOSE 8082
 ENTRYPOINT ["/bin/service"]

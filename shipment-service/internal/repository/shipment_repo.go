@@ -100,6 +100,15 @@ func (r *ShipmentRepo) UpdateLabelInfo(ctx context.Context, id, labelID, labelUR
 	return nil
 }
 
+func (r *ShipmentRepo) UpdateCost(ctx context.Context, id string, cost float64) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE shipments SET cost=$1, updated_at=NOW() WHERE id=$2`, cost, id)
+	if err != nil {
+		return fmt.Errorf("update cost: %w", err)
+	}
+	return nil
+}
+
 func (r *ShipmentRepo) Delete(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM shipments WHERE id = $1`, id)
 	if err != nil {

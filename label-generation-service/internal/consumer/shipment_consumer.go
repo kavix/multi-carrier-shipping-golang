@@ -16,7 +16,7 @@ type ShipmentConsumer struct {
 
 func NewShipmentConsumer(brokers []string, svc *service.LabelService) *ShipmentConsumer {
 	sc := &ShipmentConsumer{svc: svc}
-	c := kafka.NewConsumer(brokers, kafka.TopicShipmentAddressValidated, "label-generation-group", sc.handle)
+	c := kafka.NewConsumer(brokers, kafka.TopicShipmentCreated, "label-generation-group", sc.handle)
 	sc.consumer = c
 	return sc
 }

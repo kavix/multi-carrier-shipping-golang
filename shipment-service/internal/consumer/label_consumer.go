@@ -42,14 +42,16 @@ func (c *LabelConsumer) handle(ctx context.Context, key string, payload json.Raw
 
 	labelID, _ := event["label_id"].(string)
 	labelURL, _ := event["label_url"].(string)
+	trackingNumber, _ := event["tracking_number"].(string)
 
 	logger.Info("label generated event received, updating shipment",
 		logger.String("shipment_id", shipmentID),
 		logger.String("label_id", labelID),
-		logger.String("label_url", labelURL))
+		logger.String("label_url", labelURL),
+		logger.String("tracking_number", trackingNumber))
 
-	if err := c.repo.UpdateLabelURL(ctx, shipmentID, labelID, labelURL); err != nil {
-		logger.Error("failed to update shipment label url",
+	if err := c.repo.UpdateLabelInfo(ctx, shipmentID, labelID, labelURL, trackingNumber); err != nil {
+		logger.Error("failed to update shipment label info",
 			logger.String("shipment_id", shipmentID),
 			logger.String("err", err.Error()))
 		return err
