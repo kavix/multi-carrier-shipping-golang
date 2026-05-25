@@ -15,6 +15,7 @@ type CarrierClient interface {
 	GetTracking(trackingNumber string) (*domain.TrackingInfo, error)
 	GetPickupLocations(address string, limit int) ([]domain.PickupDropLocation, error)
 	GetDropLocations(address string, limit int) ([]domain.PickupDropLocation, error)
+	ValidatePostalCode(countryCode, postalCode string) (bool, error)
 }
 
 // DHLClient implements CarrierClient for DHL API
@@ -82,65 +83,9 @@ func (c *DHLClient) GetDropLocations(address string, limit int) ([]domain.Pickup
 	}, nil
 }
 
-// FedExClient implements CarrierClient for FedEx API
-type FedExClient struct {
-	apiKey    string
-	apiSecret string
-	baseURL   string
-	client    *http.Client
-}
-
-func NewFedExClient(apiKey, apiSecret, baseURL string) *FedExClient {
-	return &FedExClient{
-		apiKey:    apiKey,
-		apiSecret: apiSecret,
-		baseURL:   baseURL,
-		client:    &http.Client{Timeout: 10 * time.Second},
-	}
-}
-
-func (c *FedExClient) GetRates(from, to string, weight float64) ([]domain.CarrierRate, error) {
-	return []domain.CarrierRate{
-		{
-			CarrierID:     "fedex-priority",
-			CarrierName:   "FedEx",
-			ServiceType:   "FedEx International Priority",
-			EstimatedDays: 1,
-			Cost:          weight * 15.00,
-			Currency:      "USD",
-		},
-		{
-			CarrierID:     "fedex-economy",
-			CarrierName:   "FedEx",
-			ServiceType:   "FedEx International Economy",
-			EstimatedDays: 4,
-			Cost:          weight * 9.50,
-			Currency:      "USD",
-		},
-	}, nil
-}
-
-func (c *FedExClient) GetTracking(trackingNumber string) (*domain.TrackingInfo, error) {
-	return &domain.TrackingInfo{
-		TrackingNumber: trackingNumber,
-		Carrier:        "FedEx",
-		Status:         "picked_up",
-		Location:       "Memphis, TN",
-		Timestamp:      time.Now(),
-		Description:    "Picked up by FedEx courier",
-	}, nil
-}
-
-func (c *FedExClient) GetPickupLocations(address string, limit int) ([]domain.PickupDropLocation, error) {
-	return []domain.PickupDropLocation{
-		{ID: "fedex-1", Carrier: "FedEx", Name: "FedEx Office", Address: "100 Wall St", City: "New York", Country: "US", PostalCode: "10005", Latitude: 40.7074, Longitude: -74.0113, Type: "pickup", DistanceKm: 1.5},
-	}, nil
-}
-
-func (c *FedExClient) GetDropLocations(address string, limit int) ([]domain.PickupDropLocation, error) {
-	return []domain.PickupDropLocation{
-		{ID: "fedex-drop-1", Carrier: "FedEx", Name: "FedEx Authorized ShipCenter", Address: "200 Canal St", City: "New York", Country: "US", PostalCode: "10013", Latitude: 40.7190, Longitude: -74.0020, Type: "drop", DistanceKm: 2.1},
-	}, nil
+func (c *DHLClient) ValidatePostalCode(countryCode, postalCode string) (bool, error) {
+	// Simulate DHL postal code validation
+	return true, nil
 }
 
 // UPSClient implements CarrierClient for UPS API
@@ -202,6 +147,10 @@ func (c *UPSClient) GetDropLocations(address string, limit int) ([]domain.Pickup
 	return []domain.PickupDropLocation{
 		{ID: "ups-drop-1", Carrier: "UPS", Name: "UPS Access Point", Address: "400 Madison Ave", City: "New York", Country: "US", PostalCode: "10017", Latitude: 40.7570, Longitude: -73.9770, Type: "drop", DistanceKm: 1.0},
 	}, nil
+}
+
+func (c *UPSClient) ValidatePostalCode(countryCode, postalCode string) (bool, error) {
+	return true, nil
 }
 
 // CarrierClientFactory creates the right client based on carrier code

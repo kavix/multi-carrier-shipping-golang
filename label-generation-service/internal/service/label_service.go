@@ -208,6 +208,22 @@ func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackin
 	weight, _ := details["weight"].(float64)
 	serviceType, _ := details["service_type"].(string)
 
+	// Use validated addresses if available
+	if sv, ok := details["sender_validated"].(map[string]interface{}); ok && sv["is_valid"] == true {
+		street, _ := sv["street"].(string)
+		city, _ := sv["city"].(string)
+		state, _ := sv["state"].(string)
+		zip, _ := sv["postal_code"].(string)
+		senderAddr = fmt.Sprintf("%s, %s, %s %s (VALIDATED)", street, city, state, zip)
+	}
+	if rv, ok := details["receiver_validated"].(map[string]interface{}); ok && rv["is_valid"] == true {
+		street, _ := rv["street"].(string)
+		city, _ := rv["city"].(string)
+		state, _ := rv["state"].(string)
+		zip, _ := rv["postal_code"].(string)
+		receiverAddr = fmt.Sprintf("%s, %s, %s %s (VALIDATED)", street, city, state, zip)
+	}
+
 	m.Row(20, func() {
 		m.Col(12, func() {
 			m.Text("SHIPPING LABEL", props.Text{

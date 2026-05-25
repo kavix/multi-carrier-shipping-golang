@@ -177,11 +177,14 @@ services:
       DB_PASS: postgres
       DB_NAME: shipments
       KAFKA_BROKERS: kafka:29092
+      ADDRESS_SERVICE_URL: http://address-validation-service:8086
     depends_on:
       postgres-shipment:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      address-validation-service:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:8081/health || exit 1"]
       interval: 10s
