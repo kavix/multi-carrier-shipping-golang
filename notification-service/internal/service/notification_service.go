@@ -11,7 +11,7 @@ import (
 	"github.com/shipping/shared/pkg/logger"
 )
 
-type NotificationService struct{
+type NotificationService struct {
 	cfg *config.Config
 }
 
@@ -28,7 +28,7 @@ func (s *NotificationService) SendEmail(to, subject, body string) error {
 	)
 
 	if s.cfg == nil {
-		return fmt.Errorf("smtp config not loaded")
+		return fmt.Errorf("config not loaded")
 	}
 
 	from := s.cfg.SMTPFrom
@@ -56,8 +56,17 @@ func (s *NotificationService) SendEmail(to, subject, body string) error {
 
 	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPassword, s.cfg.SMTPHost)
 
-	// Dial TCP
-	conn, err := net.Dial("tcp", addr)
+	var conn net.Conn
+	var err error
+
+	if s.cfg.SMTPPort == 465 {
+		tlsCfg := &tls.Config{
+			ServerName: s.cfg.SMTPHost,
+		}
+		conn, err = tls.Dial("tcp", addr, tlsCfg)
+	} else {
+		conn, err = net.Dial("tcp", addr)
+	}
 	if err != nil {
 		return fmt.Errorf("dial smtp: %w", err)
 	}
@@ -77,11 +86,13 @@ func (s *NotificationService) SendEmail(to, subject, body string) error {
 		}
 	}()
 
-	// STARTTLS if available
-	if ok, _ := c.Extension("STARTTLS"); ok {
-		tlsCfg := &tls.Config{ServerName: s.cfg.SMTPHost}
-		if err = c.StartTLS(tlsCfg); err != nil {
-			return fmt.Errorf("starttls: %w", err)
+	if s.cfg.SMTPPort != 465 {
+		// STARTTLS if available
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			tlsCfg := &tls.Config{ServerName: s.cfg.SMTPHost}
+			if err = c.StartTLS(tlsCfg); err != nil {
+				return fmt.Errorf("starttls: %w", err)
+			}
 		}
 	}
 
@@ -113,7 +124,7 @@ func (s *NotificationService) SendEmail(to, subject, body string) error {
 		return fmt.Errorf("close data: %w", err)
 	}
 
-	log.Info("email sent", logger.String("to", to))
+	log.Info("email sent via SMTP", logger.String("to", to))
 	return nil
 }
 

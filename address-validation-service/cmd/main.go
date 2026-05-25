@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/shipping/address-validation-service/internal/config"
+	"github.com/shipping/address-validation-service/internal/consumer"
 	"github.com/shipping/address-validation-service/internal/handler"
 	"github.com/shipping/address-validation-service/internal/repository"
 	"github.com/shipping/address-validation-service/internal/service"
@@ -32,9 +34,16 @@ func main() {
 	producer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicAddressValidated)
 	defer producer.Close()
 
+	shipmentValidatedProducer := kafka.NewProducer(cfg.KafkaBrokers, kafka.TopicShipmentAddressValidated)
+	defer shipmentValidatedProducer.Close()
+
 	repo := repository.NewAddressRepo(db)
 	svc := service.NewAddressService(repo, producer)
 	h := handler.NewAddressHandler(svc)
+
+	// Start shipment consumer for address validation
+	shipmentConsumer := consumer.NewShipmentConsumer(cfg.KafkaBrokers, svc, shipmentValidatedProducer)
+	go shipmentConsumer.Start(context.Background())
 
 	r := gin.Default()
 	r.Use(middleware.DownstreamContextMiddleware())

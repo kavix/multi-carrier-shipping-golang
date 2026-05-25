@@ -89,10 +89,27 @@ func (h *ReturnHandler) ListReturns(c *gin.Context) {
 	c.JSON(http.StatusOK, returns)
 }
 
+func (h *ReturnHandler) UpdateStatus(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.UpdateStatus(c.Request.Context(), id, req.Status); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "status updated"})
+}
+
 func (h *ReturnHandler) Routes(r *gin.Engine) {
 	r.POST("/returns", h.RequestReturn)
 	r.POST("/returns/:id/approve", h.ApproveReturn)
 	r.POST("/returns/:id/refund", h.ProcessRefund)
+	r.PUT("/returns/:id", h.UpdateStatus)
 	r.GET("/returns/:id", h.GetReturn)
 	r.GET("/returns", h.ListReturns)
 }
