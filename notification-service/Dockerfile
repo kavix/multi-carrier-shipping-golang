@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /src
 
@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/service ./cmd
 
 # Final image
-FROM alpine:3.18
+FROM alpine:3.20
 RUN apk --no-cache add ca-certificates tzdata
 COPY --from=builder /bin/service /bin/service
 ENTRYPOINT ["/bin/service"]

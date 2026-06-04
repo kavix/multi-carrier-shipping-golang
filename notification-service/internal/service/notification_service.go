@@ -1,12 +1,14 @@
 package service
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/smtp"
 	"strings"
 
+	"github.com/resend/resend-go/v3"
 	"github.com/shipping/notification-service/internal/config"
 	"github.com/shipping/shared/pkg/logger"
 )
@@ -19,10 +21,67 @@ func NewNotificationService(cfg *config.Config) *NotificationService {
 	return &NotificationService{cfg: cfg}
 }
 
-// SendEmail sends a plain text email using configured SMTP server.
+// SendEmail sends an email using Resend if configured, otherwise falls back to SMTP.
 func (s *NotificationService) SendEmail(to, subject, body string) error {
+	if s.cfg != nil && s.cfg.ResendAPIKey != "" {
+		err := s.SendViaResend(to, subject, body)
+		if err != nil && strings.Contains(err.Error(), "You can only send testing emails to your own email address") {
+			start := strings.Index(err.Error(), "(")
+			end := strings.Index(err.Error(), ")")
+			if start != -1 && end != -1 && start < end {
+				sandboxEmail := err.Error()[start+1 : end]
+				logger.Get().Warn("Resend sandbox restriction detected. Redirecting email to account owner",
+					logger.String("original_to", to),
+					logger.String("sandbox_email", sandboxEmail),
+				)
+				return s.SendViaResend(sandboxEmail, subject, fmt.Sprintf("[Redirected from %s]\n\n%s", to, body))
+			}
+		}
+		return err
+	}
+	return s.SendViaSMTP(to, subject, body)
+}
+
+// SendViaResend sends an email using the Resend API.
+func (s *NotificationService) SendViaResend(to, subject, body string) error {
 	log := logger.Get()
-	log.Info("sending email",
+	log.Info("sending email via Resend",
+		logger.String("to", to),
+		logger.String("subject", subject),
+	)
+
+	client := resend.NewClient(s.cfg.ResendAPIKey)
+
+	from := s.cfg.SMTPFrom
+	if from == "" {
+		from = "onboarding@resend.dev" // Fallback for Resend sandbox
+	}
+
+	params := &resend.SendEmailRequest{
+		From:    from,
+		To:      []string{to},
+		Subject: subject,
+		Text:    body,
+	}
+
+	// If body looks like HTML, use Html field
+	if strings.Contains(body, "<p>") || strings.Contains(body, "<html>") {
+		params.Html = body
+	}
+
+	sent, err := client.Emails.SendWithContext(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("resend error: %w", err)
+	}
+
+	log.Info("email sent via Resend", logger.String("id", sent.Id))
+	return nil
+}
+
+// SendViaSMTP sends a plain text email using configured SMTP server.
+func (s *NotificationService) SendViaSMTP(to, subject, body string) error {
+	log := logger.Get()
+	log.Info("sending email via SMTP",
 		logger.String("to", to),
 		logger.String("subject", subject),
 	)
@@ -52,7 +111,7 @@ func (s *NotificationService) SendEmail(to, subject, body string) error {
 	}
 	msg += "\r\n" + body
 
-	addr := fmt.Sprintf("%s:%d", s.cfg.SMTPHost, s.cfg.SMTPPort)
+	addr := net.JoinHostPort(s.cfg.SMTPHost, fmt.Sprintf("%d", s.cfg.SMTPPort))
 
 	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPassword, s.cfg.SMTPHost)
 

@@ -27,8 +27,8 @@ services:
       test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 90s
 
   # PostgreSQL - One per service (Database-per-Service pattern)
   postgres-shipment:
@@ -397,8 +397,11 @@ services:
       SMTP_PORT: "${SMTP_PORT:-1025}"
       SMTP_FROM: ${SMTP_FROM:-test@example.com}
       SMTP_USER: ${SMTP_USER:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PASS: ${SMTP_PASS:-}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     depends_on:
       kafka:
         condition: service_healthy

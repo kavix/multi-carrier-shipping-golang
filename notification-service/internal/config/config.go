@@ -14,6 +14,7 @@ type Config struct {
 	SMTPUser       string
 	SMTPPassword   string
 	SendGridAPIKey string
+	ResendAPIKey   string
 }
 
 func Load() *Config {
@@ -34,12 +35,16 @@ func Load() *Config {
 	}
 	smtpFrom := os.Getenv("SMTP_FROM")
 	smtpUser := os.Getenv("SMTP_USER")
+	if smtpUser == "" {
+		smtpUser = os.Getenv("SMTP_USERNAME")
+	}
 	// Accept either SMTP_PASSWORD or SMTP_PASS
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 	if smtpPassword == "" {
 		smtpPassword = os.Getenv("SMTP_PASS")
 	}
 	sendgridAPIKey := os.Getenv("SENDGRID_API_KEY")
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
 
 	return &Config{
 		KafkaBrokers:   strings.Split(brokers, ","),
@@ -49,5 +54,6 @@ func Load() *Config {
 		SMTPUser:       smtpUser,
 		SMTPPassword:   smtpPassword,
 		SendGridAPIKey: sendgridAPIKey,
+		ResendAPIKey:   resendAPIKey,
 	}
 }
