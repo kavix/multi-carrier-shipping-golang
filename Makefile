@@ -68,3 +68,9 @@ test-flow:
 status:
 	@echo "=== Service Status ==="
 	@docker compose ps
+
+release-local:
+	./release-images.sh --local $(if $(TAG),--tag $(TAG),) $(if $(REGISTRY),--registry $(REGISTRY),)
+
+release:
+	./release-images.sh $(if $(TAG),--tag $(TAG),) $(if $(REGISTRY),--registry $(REGISTRY),)

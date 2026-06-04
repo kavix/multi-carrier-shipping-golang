@@ -266,3 +266,24 @@ multi-carrier-shipping/
 4. Add Redis caching for address validation and carrier rates
 5. Deploy to Kubernetes with Helm charts
 6. Add Prometheus metrics and Grafana dashboards
+
+## Release Management
+
+The platform includes automated tools to build, tag, and publish Docker images for all 10 microservices to a container registry (e.g. GitHub Container Registry or Docker Hub).
+
+### 1. Build and Tag Images Locally
+To compile the microservices and tag them locally under a release version without publishing them:
+```bash
+make release-local TAG=v1.0.0
+```
+
+### 2. Build and Publish to Registry
+To build, tag, and publish the images to the registry (defaults to `ghcr.io/kavix/multi-carrier-shipping-golang` but can be overridden with `REGISTRY`):
+```bash
+make release TAG=v1.0.0 REGISTRY=ghcr.io/your-username/your-repo
+```
+
+You can also run the release script directly to enable interactive tagging and draft a GitHub release using the GitHub CLI (`gh`):
+```bash
+./release-images.sh --github-release v1.0.0
+```
