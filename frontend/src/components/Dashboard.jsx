@@ -20,12 +20,26 @@ export default function Dashboard() {
             setLoading(true)
             const shipmentsList = await shipments.list()
             const pending = shipmentsList.filter(s => s.status === 'pending' || s.status === 'processing').length
+            const returned = shipmentsList.filter(s => s.status === 'returned').length
+
+            // Load invoices for each shipment to count pending ones
+            const invoicePromises = shipmentsList.map(async (ship) => {
+                try {
+                    const inv = await billing.getInvoiceByShipment(ship.id)
+                    return inv
+                } catch (e) {
+                    return null
+                }
+            })
+            const results = await Promise.all(invoicePromises)
+            const activeInvoices = results.filter(r => r !== null)
+            const pendingInvoices = activeInvoices.filter(inv => inv.status === 'pending').length
 
             setStats({
                 totalShipments: shipmentsList.length,
                 pendingShipments: pending,
-                totalReturns: 0,
-                pendingInvoices: 0,
+                totalReturns: returned,
+                pendingInvoices: pendingInvoices,
             })
             setError(null)
         } catch (err) {

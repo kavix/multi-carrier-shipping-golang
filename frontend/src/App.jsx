@@ -8,6 +8,7 @@ import ApiForm from './components/ApiForm'
 import StatusManager from './components/StatusManager'
 import RateComparison from './components/RateComparison'
 import ReturnManager from './components/ReturnManager'
+import BillingManager from './components/BillingManager'
 
 const DEFAULT_API = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const DEFAULT_TOKEN = 'Bearer test-token'
@@ -44,6 +45,8 @@ export default function App() {
         return <RateComparison />
       case 'returns':
         return <ReturnManager />
+      case 'billing':
+        return <BillingManager />
       case 'settings':
         return <Settings baseUrl={baseUrl} onBaseUrlChange={setBaseUrl} token={token} onTokenChange={setToken} />
       case 'api-test':
@@ -107,6 +110,14 @@ export default function App() {
               onClick={() => setView('returns')}
             >
               ↩️ Returns
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item ${view === 'billing' ? 'active' : ''}`}
+              onClick={() => setView('billing')}
+            >
+              💳 Invoices & Payments
             </button>
           </li>
           <li>
