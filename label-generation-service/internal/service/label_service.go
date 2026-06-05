@@ -28,6 +28,7 @@ import (
 	"github.com/shipping/shared/pkg/logger"
 	"github.com/shipping/shared/pkg/utils"
 
+	"github.com/johnfercher/maroto/pkg/color"
 	"github.com/johnfercher/maroto/pkg/consts"
 	"github.com/johnfercher/maroto/pkg/pdf"
 	"github.com/johnfercher/maroto/pkg/props"
@@ -231,8 +232,45 @@ func (s *LabelService) generateRealisticTrackingNumber(carrier string) string {
 	}
 }
 
+func formatAddressLines(addr string) []string {
+	parts := strings.Split(addr, ",")
+	var lines []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+	return lines
+}
+
+func getServiceIndicator(carrier, serviceType string) (letter string, description string) {
+	carrierUpper := strings.ToUpper(carrier)
+	serviceLower := strings.ToLower(serviceType)
+
+	switch carrierUpper {
+	case "FEDEX":
+		if strings.Contains(serviceLower, "ground") {
+			return "G", "FedEx Ground"
+		}
+		return "E", "FedEx Express"
+	case "UPS":
+		if strings.Contains(serviceLower, "ground") {
+			return "UG", "UPS Ground"
+		}
+		return "UA", "UPS Air"
+	case "DHL":
+		return "D", "DHL Express"
+	case "USPS":
+		return "P", "USPS Priority"
+	default:
+		return "S", "Standard Shipping"
+	}
+}
+
 func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackingNumber string) ([]byte, error) {
 	m := pdf.NewMaroto(consts.Portrait, consts.A4)
+	// Set default margins to prevent rendering artifacts caused by changing page margins mid-document
 	m.SetPageMargins(10, 10, 10)
 
 	shipmentID, _ := details["shipment_id"].(string)
@@ -246,113 +284,187 @@ func (s *LabelService) generateMarotoPDF(details map[string]interface{}, trackin
 	rateCost, _ := details["rate_cost"].(float64)
 	rateCurrency, _ := details["rate_currency"].(string)
 	rateServiceLabel, _ := details["rate_service"].(string)
-	pickupLocID, _ := details["pickup_location_id"].(string)
-	dropLocID, _ := details["drop_location_id"].(string)
 
-	// Use validated addresses if available
+	// Format Sender Address
+	var senderStreet, senderCityStateZip string
 	if sv, ok := details["sender_validated"].(map[string]interface{}); ok && sv["is_valid"] == true {
 		street, _ := sv["street"].(string)
 		city, _ := sv["city"].(string)
 		state, _ := sv["state"].(string)
 		zip, _ := sv["postal_code"].(string)
-		senderAddr = fmt.Sprintf("%s, %s, %s %s (VALIDATED)", street, city, state, zip)
+		senderStreet = street
+		senderCityStateZip = fmt.Sprintf("%s, %s %s", city, state, zip)
+	} else {
+		lines := formatAddressLines(senderAddr)
+		if len(lines) > 0 {
+			senderStreet = lines[0]
+			if len(lines) > 1 {
+				senderCityStateZip = strings.Join(lines[1:], ", ")
+			}
+		}
 	}
+
+	// Format Receiver Address
+	var receiverStreet, receiverCityStateZip string
 	if rv, ok := details["receiver_validated"].(map[string]interface{}); ok && rv["is_valid"] == true {
 		street, _ := rv["street"].(string)
 		city, _ := rv["city"].(string)
 		state, _ := rv["state"].(string)
 		zip, _ := rv["postal_code"].(string)
-		receiverAddr = fmt.Sprintf("%s, %s, %s %s (VALIDATED)", street, city, state, zip)
+		receiverStreet = street
+		receiverCityStateZip = fmt.Sprintf("%s, %s %s", city, state, zip)
+	} else {
+		lines := formatAddressLines(receiverAddr)
+		if len(lines) > 0 {
+			receiverStreet = lines[0]
+			if len(lines) > 1 {
+				receiverCityStateZip = strings.Join(lines[1:], ", ")
+			}
+		}
 	}
 
-	m.Row(20, func() {
-		m.Col(12, func() {
-			m.Text("SHIPPING LABEL", props.Text{
-				Size:  16,
-				Align: consts.Center,
-				Style: consts.Bold,
-			})
-		})
-	})
+	// Determine carrier specific details and class letters
+	serviceLetter, serviceDesc := getServiceIndicator(carrier, serviceType)
 
-	m.Row(10, func() {
-		m.Col(12, func() {
-			m.Text(fmt.Sprintf("Carrier: %s | Service: %s", carrier, serviceType), props.Text{
-				Size:  10,
-				Align: consts.Center,
-			})
-		})
-	})
-
-	m.Line(5)
-
-	m.Row(40, func() {
-		m.Col(6, func() {
-			m.Text("FROM:", props.Text{Size: 8, Style: consts.Bold})
-			m.Text(senderName, props.Text{Size: 10, Top: 5})
-			m.Text(senderAddr, props.Text{Size: 10, Top: 15})
-		})
-		m.Col(6, func() {
-			m.Text("TO:", props.Text{Size: 8, Style: consts.Bold})
-			m.Text(receiverName, props.Text{Size: 10, Top: 5})
-			m.Text(receiverAddr, props.Text{Size: 10, Top: 15})
-		})
-	})
-
-	m.Line(5)
-
-	m.Row(20, func() {
-		m.Col(6, func() {
-			m.Text(fmt.Sprintf("WEIGHT: %.2f KG", weight), props.Text{Size: 10, Style: consts.Bold})
-		})
-		m.Col(6, func() {
-			m.Text(fmt.Sprintf("SHIPMENT ID: %s", shipmentID), props.Text{Size: 8})
-		})
-	})
-
+	// Determine rate text
+	rateText := "N/A"
 	if rateCost > 0 {
-		m.Row(20, func() {
-			m.Col(6, func() {
-				m.Text(fmt.Sprintf("RATE: %.2f %s", rateCost, rateCurrency), props.Text{Size: 10, Style: consts.Bold})
-			})
-			m.Col(6, func() {
-				label := "FedEx Rate"
-				if rateServiceLabel != "" {
-					label = rateServiceLabel
-				}
-				m.Text(label, props.Text{Size: 8})
-			})
-		})
+		rateText = fmt.Sprintf("%.2f %s", rateCost, rateCurrency)
+		if rateServiceLabel != "" && rateServiceLabel != "FedEx Rate" {
+			rateText = fmt.Sprintf("%.2f %s (%s)", rateCost, rateCurrency, rateServiceLabel)
+		}
 	}
 
-	if pickupLocID != "" || dropLocID != "" {
-		m.Row(20, func() {
-			if pickupLocID != "" {
-				m.Col(6, func() {
-					m.Text(fmt.Sprintf("PICKUP AT: %s", pickupLocID), props.Text{Size: 8, Style: consts.Bold})
-				})
-			}
-			if dropLocID != "" {
-				m.Col(6, func() {
-					m.Text(fmt.Sprintf("DROP OFF AT: %s", dropLocID), props.Text{Size: 8, Style: consts.Bold})
-				})
-			}
-		})
+	receiverZip := extractPostalCode(receiverAddr)
+	if receiverZip == "" {
+		receiverZip = "00000"
 	}
 
-	m.Row(30, func() {
+	// Enable borders around the grid cells to create structured blocks
+	m.SetBorder(true)
+
+	// Row 1 (Header/From/Service): 35 mm
+	m.Row(35, func() {
+		m.Col(8, func() {
+			m.Text("FROM:", props.Text{Size: 7, Style: consts.Bold, Top: 2, Left: 4})
+			m.Text(senderName, props.Text{Size: 9, Style: consts.Bold, Top: 7, Left: 4})
+			m.Text(senderStreet, props.Text{Size: 8, Top: 13, Left: 4})
+			m.Text(senderCityStateZip, props.Text{Size: 8, Top: 19, Left: 4})
+		})
+		m.SetBackgroundColor(color.Color{Red: 0, Green: 0, Blue: 0})
+		m.Col(4, func() {
+			m.Text(serviceLetter, props.Text{
+				Size:  24,
+				Style: consts.Bold,
+				Align: consts.Center,
+				Top:   6,
+				Color: color.Color{Red: 255, Green: 255, Blue: 255},
+			})
+			m.Text(serviceDesc, props.Text{
+				Size:  7,
+				Style: consts.Bold,
+				Align: consts.Center,
+				Top:   24,
+				Color: color.Color{Red: 255, Green: 255, Blue: 255},
+			})
+		})
+		m.SetBackgroundColor(color.Color{Red: 255, Green: 255, Blue: 255})
+	})
+
+	// Row 2 (To Address): 50 mm
+	m.Row(50, func() {
 		m.Col(12, func() {
-			m.Barcode(trackingNumber, props.Barcode{
+			m.Text("SHIP TO:", props.Text{Size: 8, Style: consts.Bold, Top: 3, Left: 6})
+			m.Text(receiverName, props.Text{Size: 14, Style: consts.Bold, Top: 10, Left: 6})
+			m.Text(receiverStreet, props.Text{Size: 11, Top: 21, Left: 6})
+			m.Text(receiverCityStateZip, props.Text{Size: 11, Top: 31, Left: 6})
+		})
+	})
+
+	// Row 3 (Carrier Banner): 22 mm
+	m.SetBackgroundColor(color.Color{Red: 0, Green: 0, Blue: 0})
+	m.Row(22, func() {
+		m.Col(12, func() {
+			m.Text(strings.ToUpper(carrier)+" - "+strings.ToUpper(serviceType), props.Text{
+				Size:  16,
+				Style: consts.Bold,
+				Align: consts.Center,
+				Top:   7,
+				Color: color.Color{Red: 255, Green: 255, Blue: 255},
+			})
+		})
+	})
+	m.SetBackgroundColor(color.Color{Red: 255, Green: 255, Blue: 255})
+
+	// Row 4 (Routing/DataMatrix): 35 mm
+	m.Row(35, func() {
+		m.Col(8, func() {
+			m.Text("RTP / POSTAL CODE:", props.Text{Size: 7, Style: consts.Bold, Top: 2, Left: 4})
+			m.Barcode(receiverZip, props.Barcode{
+				Percent: 75,
 				Center:  true,
+				Top:     7,
+			})
+			m.Text(receiverZip, props.Text{Size: 8, Align: consts.Center, Top: 24})
+		})
+		m.Col(4, func() {
+			m.Text("DATA MATRIX", props.Text{Size: 7, Style: consts.Bold, Top: 2, Align: consts.Center})
+			m.DataMatrixCode(shipmentID, props.Rect{
+				Percent: 70,
+				Center:  true,
+				Top:     7,
+			})
+		})
+	})
+
+	// Row 5 (Package Details): 22 mm
+	m.Row(22, func() {
+		m.Col(3, func() {
+			m.Text("SHIPMENT ID", props.Text{Size: 7, Style: consts.Bold, Top: 3, Left: 4})
+			m.Text(shipmentID, props.Text{Size: 8, Top: 11, Left: 4})
+		})
+		m.Col(3, func() {
+			m.Text("WEIGHT", props.Text{Size: 7, Style: consts.Bold, Top: 3, Left: 4})
+			m.Text(fmt.Sprintf("%.2f KG", weight), props.Text{Size: 8, Top: 11, Left: 4})
+		})
+		m.Col(3, func() {
+			m.Text("SERVICE TYPE", props.Text{Size: 7, Style: consts.Bold, Top: 3, Left: 4})
+			m.Text(strings.ToUpper(serviceType), props.Text{Size: 8, Top: 11, Left: 4})
+		})
+		m.Col(3, func() {
+			m.Text("POSTAGE/RATE", props.Text{Size: 7, Style: consts.Bold, Top: 3, Left: 4})
+			m.Text(rateText, props.Text{Size: 8, Top: 11, Left: 4})
+		})
+	})
+
+	// Row 6 (Tracking Barcode): 72 mm
+	m.Row(72, func() {
+		m.Col(12, func() {
+			m.Text("TRACKING NUMBER:", props.Text{Size: 8, Style: consts.Bold, Top: 3, Left: 6})
+			m.Barcode(trackingNumber, props.Barcode{
 				Percent: 80,
+				Center:  true,
+				Top:     9,
 			})
 			m.Text(trackingNumber, props.Text{
-				Size:  10,
+				Size:  14,
+				Style: consts.Bold,
 				Align: consts.Center,
-				Top:   22,
+				Top:   56,
 			})
 		})
 	})
+
+	// Row 7 (Footer/Notes): 24 mm
+	m.Row(24, func() {
+		m.Col(12, func() {
+			m.Text("INSTRUCTIONS / NOTES:", props.Text{Size: 6, Style: consts.Bold, Top: 2, Left: 4})
+			m.Text("Deliver to recipient. Please handle with care. Return service requested.", props.Text{Size: 7, Top: 8, Left: 4})
+			m.Text("System generated label. No signature required on delivery.", props.Text{Size: 7, Top: 14, Left: 4})
+		})
+	})
+
+	m.SetBorder(false)
 
 	buf, err := m.Output()
 	if err != nil {
