@@ -7,16 +7,7 @@ export default function BillingManager() {
     const [error, setError] = useState(null)
     const [activeTab, setActiveTab] = useState('unpaid')
     
-    // Checkout Modal State
-    const [showCheckout, setShowCheckout] = useState(false)
-    const [selectedInvoice, setSelectedInvoice] = useState(null)
-    const [cardHolder, setCardHolder] = useState('')
-    const [cardNumber, setCardNumber] = useState('')
-    const [cardExpiry, setCardExpiry] = useState('')
-    const [cardCvv, setCardCvv] = useState('')
-    const [isPaying, setIsPaying] = useState(false)
-    const [paymentSuccess, setPaymentSuccess] = useState(false)
-    const [paymentError, setPaymentError] = useState(null)
+    const [isRedirecting, setIsRedirecting] = useState(false)
 
     useEffect(() => {
         loadData()
@@ -49,42 +40,22 @@ export default function BillingManager() {
         }
     }
 
-    const openCheckout = (invoice) => {
-        setSelectedInvoice(invoice)
-        setCardHolder('')
-        setCardNumber('')
-        setCardExpiry('')
-        setCardCvv('')
-        setPaymentError(null)
-        setPaymentSuccess(false)
-        setShowCheckout(true)
-    }
-
-    const handlePaymentSubmit = async (e) => {
-        e.preventDefault()
-        if (!selectedInvoice) return
-
+    const handlePayClick = async (invoice) => {
         try {
-            setIsPaying(true)
-            setPaymentError(null)
-
-            // Submit payment to Stripe endpoint
-            const payment = await billing.processPayment({
-                invoice_id: selectedInvoice.id,
+            setError(null)
+            setIsRedirecting(true)
+            const session = await billing.processPayment({
+                invoice_id: invoice.id,
                 method: 'stripe'
             })
-
-            setPaymentSuccess(true)
-            
-            // Wait 1.5 seconds to show visual checkmark, then refresh lists and close modal
-            setTimeout(() => {
-                setShowCheckout(false)
-                loadData()
-            }, 1500)
+            if (session.checkout_url) {
+                window.location.href = session.checkout_url
+            } else {
+                throw new Error('Checkout URL not returned from backend')
+            }
         } catch (err) {
-            setPaymentError(err.message || 'Payment failed')
-        } finally {
-            setIsPaying(false)
+            setError('Checkout redirection failed: ' + err.message)
+            setIsRedirecting(false)
         }
     }
 
@@ -177,9 +148,10 @@ export default function BillingManager() {
                                         <td>
                                             <button 
                                                 className="btn btn-primary btn-sm"
-                                                onClick={() => openCheckout(inv)}
+                                                onClick={() => handlePayClick(inv)}
+                                                disabled={isRedirecting}
                                             >
-                                                💳 Pay Now
+                                                {isRedirecting ? '🔄 Redirecting...' : '💳 Pay Now'}
                                             </button>
                                         </td>
                                     </tr>
@@ -231,130 +203,6 @@ export default function BillingManager() {
                 )
             )}
 
-            {/* Payment Modal (Checkout Drawer) */}
-            {showCheckout && selectedInvoice && (
-                <div className="payment-modal-overlay">
-                    <div className="payment-modal">
-                        <div className="payment-modal-header">
-                            <h3>Secure Checkout</h3>
-                            <button className="close-modal-btn" onClick={() => setShowCheckout(false)}>✕</button>
-                        </div>
-                        
-                        <div className="payment-modal-body">
-                            {/* Card Display Preview */}
-                            <div className="credit-card-mockup">
-                                <div className="card-logo">
-                                    <span>VISA</span>
-                                    <span style={{ fontSize: '12px', opacity: 0.8 }}>Stripe Gateway</span>
-                                </div>
-                                <div className="card-chip"></div>
-                                <div className="card-number-display">
-                                    {cardNumber ? cardNumber.replace(/(\d{4})/g, '$1 ').trim() : '•••• •••• •••• ••••'}
-                                </div>
-                                <div className="card-details-display">
-                                    <div className="card-holder-display">
-                                        Cardholder
-                                        <strong>{cardHolder || 'JOHN DOE'}</strong>
-                                    </div>
-                                    <div className="card-expiry-display">
-                                        Expires
-                                        <strong>{cardExpiry || 'MM/YY'}</strong>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Summary Rows */}
-                            <div style={{ marginBottom: '20px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                <div className="checkout-summary-row">
-                                    <span>Invoice Reference:</span>
-                                    <span className="mono">{selectedInvoice.id.substring(0, 8)}...</span>
-                                </div>
-                                <div className="checkout-summary-row">
-                                    <span>Service Fee:</span>
-                                    <span>${selectedInvoice.amount.toFixed(2)}</span>
-                                </div>
-                                <div className="checkout-summary-row total">
-                                    <span>Amount Due:</span>
-                                    <span>${selectedInvoice.amount.toFixed(2)}</span>
-                                </div>
-                            </div>
-
-                            {/* Form Inputs */}
-                            {paymentSuccess ? (
-                                <div className="alert alert-success" style={{ textAlign: 'center', padding: '24px 16px' }}>
-                                    <h3 style={{ margin: '0 0 8px 0' }}>✅ Payment Successful</h3>
-                                    <p style={{ margin: 0, fontSize: '13px' }}>Your shipment is now scheduled for carrier handover.</p>
-                                </div>
-                            ) : (
-                                <form onSubmit={handlePaymentSubmit} style={{ padding: 0, border: 'none' }}>
-                                    {paymentError && <div className="alert alert-error">{paymentError}</div>}
-                                    
-                                    <div className="form-group">
-                                        <label>Cardholder Name</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="John Doe" 
-                                            value={cardHolder}
-                                            onChange={(e) => setCardHolder(e.target.value)}
-                                            required
-                                            disabled={isPaying}
-                                        />
-                                    </div>
-
-                                    <div className="form-group">
-                                        <label>Card Number</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="4111 1111 1111 1111" 
-                                            maxLength="16"
-                                            value={cardNumber}
-                                            onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ''))}
-                                            required
-                                            disabled={isPaying}
-                                        />
-                                    </div>
-
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label>Expiry Date</label>
-                                            <input 
-                                                type="text" 
-                                                placeholder="MM/YY" 
-                                                maxLength="5"
-                                                value={cardExpiry}
-                                                onChange={(e) => setCardExpiry(e.target.value)}
-                                                required
-                                                disabled={isPaying}
-                                            />
-                                        </div>
-                                        <div className="form-group">
-                                            <label>CVV / CVC</label>
-                                            <input 
-                                                type="password" 
-                                                placeholder="•••" 
-                                                maxLength="3"
-                                                value={cardCvv}
-                                                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                                                required
-                                                disabled={isPaying}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <button 
-                                        type="submit" 
-                                        className="btn btn-primary" 
-                                        style={{ width: '100%', justifyContent: 'center', padding: '12px 16px', marginTop: '16px' }}
-                                        disabled={isPaying}
-                                    >
-                                        {isPaying ? '🔒 Processing...' : `Pay $${selectedInvoice.amount.toFixed(2)}`}
-                                    </button>
-                                </form>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

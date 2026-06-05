@@ -10,7 +10,7 @@ type Invoice struct {
 	Currency    string    `json:"currency" db:"currency"`
 	Status      string    `json:"status" db:"status"` // pending, paid, failed, refunded
 	Description string    `json:"description" db:"description"`
-	StripeID    string    `json:"-" db:"stripe_id"`
+	StripeID    string    `json:"stripe_id" db:"stripe_id"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	PaidAt      *time.Time `json:"paid_at,omitempty" db:"paid_at"`
 }
@@ -22,6 +22,6 @@ type Payment struct {
 	Currency  string    `json:"currency" db:"currency"`
 	Status    string    `json:"status" db:"status"`
 	Method    string    `json:"method" db:"method"` // stripe, paypal, etc.
-	StripeID  string    `json:"-" db:"stripe_id"`
+	StripeID  string    `json:"stripe_id" db:"stripe_id"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }

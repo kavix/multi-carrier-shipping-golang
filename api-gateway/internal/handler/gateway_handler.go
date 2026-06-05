@@ -83,6 +83,7 @@ func (h *GatewayHandler) Routes(r *gin.Engine) {
 	r.Any("/billing/invoices", func(c *gin.Context) { h.proxy(c, "billing") })
 	r.Any("/billing/invoices/:id", func(c *gin.Context) { h.proxy(c, "billing") })
 	r.Any("/billing/payments", func(c *gin.Context) { h.proxy(c, "billing") })
+	r.Any("/billing/payments/confirm", func(c *gin.Context) { h.proxy(c, "billing") })
 	r.Any("/returns", func(c *gin.Context) { h.proxy(c, "return") })
 	r.Any("/returns/:id", func(c *gin.Context) { h.proxy(c, "return") })
 	r.Any("/returns/:id/labels", func(c *gin.Context) { h.proxy(c, "return") })

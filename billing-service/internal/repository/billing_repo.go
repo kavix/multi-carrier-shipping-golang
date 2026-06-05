@@ -65,7 +65,7 @@ func (r *BillingRepo) GetInvoiceByShipmentID(ctx context.Context, shipmentID str
 	return &inv, nil
 }
 
-func (r *BillingRepo) UpdateInvoiceStatus(ctx context.Context, id, status string) error {
+func (r *BillingRepo) UpdateInvoiceStatus(ctx context.Context, id, status, stripeID string) error {
 	var paidAt interface{}
 	if status == "paid" {
 		paidAt = time.Now()
@@ -73,7 +73,7 @@ func (r *BillingRepo) UpdateInvoiceStatus(ctx context.Context, id, status string
 		paidAt = nil
 	}
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE invoices SET status=$1, paid_at=$2 WHERE id=$3`, status, paidAt, id)
+		`UPDATE invoices SET status=$1, paid_at=$2, stripe_id=$3 WHERE id=$4`, status, paidAt, stripeID, id)
 	if err != nil {
 		return fmt.Errorf("update invoice: %w", err)
 	}

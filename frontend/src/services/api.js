@@ -85,6 +85,7 @@ export const billing = {
     getInvoice: (id) => apiCall('GET', `/billing/invoices/${id}`),
     getInvoiceByShipment: (shipmentId) => apiCall('GET', `/billing/invoices?shipment_id=${shipmentId}`),
     processPayment: (payload) => apiCall('POST', '/billing/payments', payload),
+    confirmPayment: (payload) => apiCall('POST', '/billing/payments/confirm', payload),
 }
 
 export const returns = {

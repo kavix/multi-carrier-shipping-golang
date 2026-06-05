@@ -42,7 +42,26 @@ func (h *BillingHandler) ProcessPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	payment, err := h.svc.ProcessPayment(c.Request.Context(), req.InvoiceID, req.Method)
+	sessionID, checkoutURL, err := h.svc.ProcessPayment(c.Request.Context(), req.InvoiceID, req.Method)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"session_id":   sessionID,
+		"checkout_url": checkoutURL,
+	})
+}
+
+func (h *BillingHandler) ConfirmPayment(c *gin.Context) {
+	var req struct {
+		SessionID string `json:"session_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	payment, err := h.svc.ConfirmPayment(c.Request.Context(), req.SessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -77,6 +96,7 @@ func (h *BillingHandler) GetInvoiceByShipment(c *gin.Context) {
 func (h *BillingHandler) Routes(r *gin.Engine) {
 	r.POST("/billing/invoices", h.CreateInvoice)
 	r.POST("/billing/payments", h.ProcessPayment)
+	r.POST("/billing/payments/confirm", h.ConfirmPayment)
 	r.GET("/billing/invoices/:id", h.GetInvoice)
 	r.GET("/billing/invoices", h.GetInvoiceByShipment)
 }

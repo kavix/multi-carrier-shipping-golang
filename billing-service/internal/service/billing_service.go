@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shipping/billing-service/internal/domain"
@@ -62,27 +63,71 @@ func (s *BillingService) CreateInvoice(ctx context.Context, shipmentID, userID s
 	return invoice, nil
 }
 
-func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method string) (*domain.Payment, error) {
+func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method string) (string, string, error) {
 	invoice, err := s.repo.GetInvoiceByID(ctx, invoiceID)
 	if err != nil {
-		return nil, err
+		return "", "", err
+	}
+
+	if invoice.Status != "pending" {
+		return "", "", fmt.Errorf("invoice already %s", invoice.Status)
+	}
+
+	var sessionID string
+	var checkoutURL string
+	var payErr error
+
+	if s.stripeSecretKey != "" && s.stripeSecretKey != "sk_test_your_key" {
+		sessionID, checkoutURL, payErr = s.stripeClient.CreateCheckoutSession(ctx, invoice.ID, invoice.Amount, invoice.Currency)
+		if payErr != nil {
+			return "", "", fmt.Errorf("stripe checkout session: %w", payErr)
+		}
+	} else {
+		logger.Info("Stripe secret key is placeholder or empty, using simulated checkout flow")
+		sessionID = fmt.Sprintf("cs_sim_%s_%d", invoice.ID, time.Now().Unix())
+		checkoutURL = fmt.Sprintf("http://localhost:5173/?session_id=%s&payment_status=success", sessionID)
+	}
+
+	return sessionID, checkoutURL, nil
+}
+
+func (s *BillingService) ConfirmPayment(ctx context.Context, sessionID string) (*domain.Payment, error) {
+	var paymentStatus string
+	var invoiceID string
+	var err error
+
+	if strings.HasPrefix(sessionID, "cs_sim_") {
+		logger.Info("Confirming simulated payment", logger.String("session_id", sessionID))
+		// Extract invoice_id from cs_sim_<invoice_id>_<timestamp>
+		parts := strings.Split(sessionID, "_")
+		if len(parts) >= 3 {
+			invoiceID = parts[2]
+		} else {
+			return nil, fmt.Errorf("invalid simulated session ID format")
+		}
+		paymentStatus = "paid"
+	} else {
+		logger.Info("Retrieving checkout session from Stripe", logger.String("session_id", sessionID))
+		paymentStatus, invoiceID, err = s.stripeClient.RetrieveCheckoutSession(ctx, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("stripe retrieve session: %w", err)
+		}
+	}
+
+	invoice, err := s.repo.GetInvoiceByID(ctx, invoiceID)
+	if err != nil {
+		return nil, fmt.Errorf("get invoice: %w", err)
 	}
 
 	if invoice.Status != "pending" {
 		return nil, fmt.Errorf("invoice already %s", invoice.Status)
 	}
 
-	var stripeID string
-	var payErr error
-
-	if s.stripeSecretKey != "" && s.stripeSecretKey != "sk_test_your_key" {
-		stripeID, payErr = s.stripeClient.Charge(ctx, invoice.Amount, invoice.Currency)
-		if payErr != nil {
-			return nil, fmt.Errorf("stripe charge: %w", payErr)
-		}
-	} else {
-		logger.Info("Stripe secret key is placeholder or empty, using simulated payment gateway")
-		stripeID = fmt.Sprintf("pi_sim_%s", utils.GenerateID())
+	status := "completed"
+	invoiceStatus := "paid"
+	if paymentStatus != "paid" {
+		status = "failed"
+		invoiceStatus = "failed"
 	}
 
 	payment := &domain.Payment{
@@ -90,9 +135,9 @@ func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method s
 		InvoiceID: invoiceID,
 		Amount:    invoice.Amount,
 		Currency:  invoice.Currency,
-		Status:    "completed",
-		Method:    method,
-		StripeID:  stripeID,
+		Status:    status,
+		Method:    "stripe",
+		StripeID:  sessionID,
 		CreatedAt: time.Now(),
 	}
 
@@ -100,7 +145,7 @@ func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method s
 		return nil, fmt.Errorf("record payment: %w", err)
 	}
 
-	if err := s.repo.UpdateInvoiceStatus(ctx, invoiceID, "paid"); err != nil {
+	if err := s.repo.UpdateInvoiceStatus(ctx, invoiceID, invoiceStatus, sessionID); err != nil {
 		return nil, fmt.Errorf("update invoice: %w", err)
 	}
 
@@ -110,7 +155,7 @@ func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method s
 		"invoice_id":  invoiceID,
 		"shipment_id": invoice.ShipmentID,
 		"amount":      payment.Amount,
-		"status":      "completed",
+		"status":      status,
 		"event_type":  "payment.processed",
 	}
 	if err := s.paymentProducer.Publish(ctx, payment.ID, event); err != nil {

@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { billing } from './services/api'
 import Dashboard from './components/Dashboard'
 import ShipmentList from './components/ShipmentList'
 import ShipmentDetail from './components/ShipmentDetail'
@@ -18,6 +19,51 @@ export default function App() {
   const [selectedShipmentId, setSelectedShipmentId] = useState(null)
   const [baseUrl, setBaseUrl] = useState(DEFAULT_API)
   const [token, setToken] = useState(DEFAULT_TOKEN)
+  const [paymentAlert, setPaymentAlert] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sessionId = params.get('session_id')
+    const paymentStatus = params.get('payment_status')
+
+    if (sessionId) {
+      if (paymentStatus === 'success') {
+        confirmPayment(sessionId)
+      } else {
+        setPaymentAlert({ type: 'error', message: 'Stripe Checkout was cancelled or payment declined.' })
+        clearUrlParams()
+      }
+    } else if (paymentStatus === 'failed') {
+      setPaymentAlert({ type: 'error', message: 'Stripe Checkout payment failed.' })
+      clearUrlParams()
+    }
+  }, [])
+
+  const confirmPayment = async (sessionId) => {
+    try {
+      setPaymentAlert({ type: 'info', message: 'Verifying payment with Stripe...' })
+      const payment = await billing.confirmPayment({ session_id: sessionId })
+      if (payment.status === 'completed') {
+        setPaymentAlert({ type: 'success', message: `Payment Succeeded! Reference: ${payment.id.substring(0, 8)}...` })
+        setView('billing') // switch view to payments to see it in history
+      } else {
+        setPaymentAlert({ type: 'error', message: `Payment failed or declined. Status: ${payment.status}` })
+      }
+    } catch (err) {
+      setPaymentAlert({ type: 'error', message: `Failed to confirm payment: ${err.message}` })
+    } finally {
+      clearUrlParams()
+      setTimeout(() => {
+        setPaymentAlert(null)
+      }, 8000)
+    }
+  }
+
+  const clearUrlParams = () => {
+    const url = new URL(window.location.href)
+    url.search = ''
+    window.history.replaceState({}, document.title, url.pathname)
+  }
 
   const handleSelectShipment = (id) => {
     setSelectedShipmentId(id)
@@ -143,6 +189,12 @@ export default function App() {
       </nav>
 
       <div className="main-content">
+        {paymentAlert && (
+          <div className={`alert alert-${paymentAlert.type}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <span>{paymentAlert.message}</span>
+            <button className="btn-icon" onClick={() => setPaymentAlert(null)}>✕</button>
+          </div>
+        )}
         {renderContent()}
       </div>
     </div>
