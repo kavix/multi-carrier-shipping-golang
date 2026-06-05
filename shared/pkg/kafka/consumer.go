@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/segmentio/kafka-go"
 )
 
@@ -33,7 +35,13 @@ func (c *Consumer) Start(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return fmt.Errorf("read: %w", err)
+			fmt.Printf("kafka consumer read error: %v, retrying in 2 seconds...\n", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(2 * time.Second):
+				continue
+			}
 		}
 		if err := c.handler(ctx, string(msg.Key), msg.Value); err != nil {
 			fmt.Printf("handler error: %v\n", err)
