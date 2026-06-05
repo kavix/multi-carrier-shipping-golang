@@ -1,2 +1,23 @@
+# Environment variables
 .env
-.env
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Go build/test artifacts
+*.out
+*.test
+*.prof
