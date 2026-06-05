@@ -256,9 +256,7 @@ multi-carrier-shipping/
 - **Tracking API**: `GET /api/track/v1/details/{inquiryNumber}`
 - **Locator API**: `GET /api/locations/v1/search/availabilities/{geocode}`
 
-> **Note**: The current implementation uses simulated responses. Replace with actual API calls using your real API credentials.
-
-## Next Steps
+>## Next Steps
 
 1. Replace simulated carrier APIs with real DHL/FedEx/UPS API integrations
 2. Add JWT authentication with refresh tokens
