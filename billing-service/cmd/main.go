@@ -44,7 +44,7 @@ func main() {
 	defer invoiceProducer.Close()
 
 	repo := repository.NewBillingRepo(db)
-	svc := service.NewBillingService(repo, paymentProducer, invoiceProducer)
+	svc := service.NewBillingService(repo, paymentProducer, invoiceProducer, cfg.StripeSecretKey)
 	h := handler.NewBillingHandler(svc)
 
 	// Start Kafka consumer

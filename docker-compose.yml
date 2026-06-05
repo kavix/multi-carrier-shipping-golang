@@ -345,6 +345,7 @@ services:
       DB_PASS: postgres
       DB_NAME: billing
       KAFKA_BROKERS: kafka:29092
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
     depends_on:
       postgres-billing:
         condition: service_healthy

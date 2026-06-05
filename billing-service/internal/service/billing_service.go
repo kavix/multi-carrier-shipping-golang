@@ -16,13 +16,17 @@ type BillingService struct {
 	repo            *repository.BillingRepo
 	paymentProducer *kafka.Producer
 	invoiceProducer *kafka.Producer
+	stripeClient    *StripeClient
+	stripeSecretKey string
 }
 
-func NewBillingService(repo *repository.BillingRepo, paymentProducer, invoiceProducer *kafka.Producer) *BillingService {
+func NewBillingService(repo *repository.BillingRepo, paymentProducer, invoiceProducer *kafka.Producer, stripeSecretKey string) *BillingService {
 	return &BillingService{
 		repo:            repo,
 		paymentProducer: paymentProducer,
 		invoiceProducer: invoiceProducer,
+		stripeClient:    NewStripeClient(stripeSecretKey),
+		stripeSecretKey: stripeSecretKey,
 	}
 }
 
@@ -68,8 +72,19 @@ func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method s
 		return nil, fmt.Errorf("invoice already %s", invoice.Status)
 	}
 
-	// Simulate Stripe payment processing
-	// In production: call Stripe API
+	var stripeID string
+	var payErr error
+
+	if s.stripeSecretKey != "" && s.stripeSecretKey != "sk_test_your_key" {
+		stripeID, payErr = s.stripeClient.Charge(ctx, invoice.Amount, invoice.Currency)
+		if payErr != nil {
+			return nil, fmt.Errorf("stripe charge: %w", payErr)
+		}
+	} else {
+		logger.Info("Stripe secret key is placeholder or empty, using simulated payment gateway")
+		stripeID = fmt.Sprintf("pi_sim_%s", utils.GenerateID())
+	}
+
 	payment := &domain.Payment{
 		ID:        utils.GenerateID(),
 		InvoiceID: invoiceID,
@@ -77,7 +92,7 @@ func (s *BillingService) ProcessPayment(ctx context.Context, invoiceID, method s
 		Currency:  invoice.Currency,
 		Status:    "completed",
 		Method:    method,
-		StripeID:  fmt.Sprintf("pi_%s", utils.GenerateID()),
+		StripeID:  stripeID,
 		CreatedAt: time.Now(),
 	}
 
