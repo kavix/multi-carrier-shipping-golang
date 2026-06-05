@@ -32,6 +32,16 @@ type TrackingEvent struct {
 	EventType      string `json:"event_type"`
 }
 
+type PaymentEvent struct {
+	PaymentID  string  `json:"payment_id"`
+	InvoiceID  string  `json:"invoice_id"`
+	ShipmentID string  `json:"shipment_id"`
+	Amount     float64 `json:"amount"`
+	Status     string  `json:"status"`
+	UserID     string  `json:"user_id"`
+	EventType  string  `json:"event_type"`
+}
+
 type NotificationConsumer struct {
 	service *service.NotificationService
 }
@@ -186,6 +196,43 @@ Track live: https://tracking.example.com/%s
 	return c.service.SendEmail("user@example.com", subject, body)
 }
 
+func (c *NotificationConsumer) HandlePaymentProcessed(ctx context.Context, key string, payload []byte) error {
+	var event PaymentEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return fmt.Errorf("unmarshal payment event: %w", err)
+	}
+
+	logger.Info("notification: payment processed",
+		logger.String("payment_id", event.PaymentID),
+		logger.String("status", event.Status))
+
+	if event.Status != "completed" {
+		logger.Info("payment was not completed, skipping notification email", logger.String("status", event.Status))
+		return nil
+	}
+
+	subject := "Payment Succeeded - Receipt for Invoice " + event.InvoiceID
+	body := fmt.Sprintf(`Hello,
+
+We have successfully processed your payment! Thank you for your business.
+
+Receipt Details:
+Payment ID: %s
+Invoice ID: %s
+Shipment ID: %s
+Amount Paid: $%.2f USD
+Status: Completed
+
+You can track your shipment status on the dashboard.
+
+Best regards,
+Shipping Team
+`, event.PaymentID, event.InvoiceID, event.ShipmentID, event.Amount)
+
+	to := event.UserID + "@example.com"
+	return c.service.SendEmail(to, subject, body)
+}
+
 func (c *NotificationConsumer) Start(ctx context.Context, brokers []string) error {
 	// Start multiple consumers in goroutines
 
@@ -215,7 +262,20 @@ func (c *NotificationConsumer) Start(ctx context.Context, brokers []string) erro
 		}
 	}()
 
-	// Consumer 3: tracking.updated (blocking - keeps main alive)
+	// Consumer 3: payment.processed
+	go func() {
+		handler := func(ctx context.Context, key string, payload json.RawMessage) error {
+			return c.HandlePaymentProcessed(ctx, key, payload)
+		}
+		consumer := kafka.NewConsumer(brokers, kafka.TopicPaymentProcessed, "notification-payment-group", handler)
+		defer consumer.Close()
+		logger.Info("notification consumer started for payment.processed")
+		if err := consumer.Start(ctx); err != nil {
+			logger.Error("payment consumer error", logger.String("err", err.Error()))
+		}
+	}()
+
+	// Consumer 4: tracking.updated (blocking - keeps main alive)
 	handler := func(ctx context.Context, key string, payload json.RawMessage) error {
 		return c.HandleTrackingUpdated(ctx, key, payload)
 	}

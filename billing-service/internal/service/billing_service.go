@@ -156,6 +156,7 @@ func (s *BillingService) ConfirmPayment(ctx context.Context, sessionID string) (
 		"shipment_id": invoice.ShipmentID,
 		"amount":      payment.Amount,
 		"status":      status,
+		"user_id":     invoice.UserID,
 		"event_type":  "payment.processed",
 	}
 	if err := s.paymentProducer.Publish(ctx, payment.ID, event); err != nil {
