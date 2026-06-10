@@ -10,6 +10,9 @@ import StatusManager from './components/StatusManager'
 import RateComparison from './components/RateComparison'
 import ReturnManager from './components/ReturnManager'
 import BillingManager from './components/BillingManager'
+import TestRunner from './components/TestRunner'
+import CarrierManager from './components/CarrierManager'
+import AddressTools from './components/AddressTools'
 
 const DEFAULT_API = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const DEFAULT_TOKEN = 'Bearer test-token'
@@ -93,6 +96,12 @@ export default function App() {
         return <ReturnManager />
       case 'billing':
         return <BillingManager />
+      case 'carriers':
+        return <CarrierManager />
+      case 'address-tools':
+        return <AddressTools />
+      case 'test-runner':
+        return <TestRunner />
       case 'settings':
         return <Settings baseUrl={baseUrl} onBaseUrlChange={setBaseUrl} token={token} onTokenChange={setToken} />
       case 'api-test':
@@ -160,7 +169,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item ${view === 'billing' ? 'active' : ''}`}
+              className={`nav-item \${view === 'billing' ? 'active' : ''}`}
               onClick={() => setView('billing')}
             >
               💳 Invoices & Payments
@@ -168,7 +177,31 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item ${view === 'api-test' ? 'active' : ''}`}
+              className={`nav-item \${view === 'carriers' ? 'active' : ''}`}
+              onClick={() => setView('carriers')}
+            >
+              🚢 Carrier Manager
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item \${view === 'address-tools' ? 'active' : ''}`}
+              onClick={() => setView('address-tools')}
+            >
+              📍 Address Tools
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item \${view === 'test-runner' ? 'active' : ''}`}
+              onClick={() => setView('test-runner')}
+            >
+              🚀 System Runner
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item \${view === 'api-test' ? 'active' : ''}`}
               onClick={() => setView('api-test')}
             >
               🧪 API Test

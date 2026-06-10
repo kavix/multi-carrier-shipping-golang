@@ -51,11 +51,14 @@ export const carriers = {
         return apiCall('GET', `/carriers/pickup-locations?carrier=${carrier}&address=${address}&limit=${limit}`)
     },
     getDropLocations: (carrier, address, limit = 10) => {
-        return apiCall('GET', `/carriers/drop-locations?carrier=${carrier}&address=${address}&limit=${limit}`)
+        return apiCall('GET', `/carriers/drop-locations?carrier=\${carrier}&address=\${address}&limit=\${limit}`)
     },
-}
+    validatePostalCode: (carrier, country, postalCode) => {
+        return apiCall('GET', `/carriers/validate-postal-code?carrier=\${carrier}&country=\${country}&postal_code=\${postalCode}`)
+    },
+    }
 
-export const rates = {
+    export const rates = {
     compare: (payload) => apiCall('POST', '/rates/compare', payload),
 }
 
@@ -86,6 +89,15 @@ export const billing = {
     getInvoiceByShipment: (shipmentId) => apiCall('GET', `/billing/invoices?shipment_id=${shipmentId}`),
     processPayment: (payload) => apiCall('POST', '/billing/payments', payload),
     confirmPayment: (payload) => apiCall('POST', '/billing/payments/confirm', payload),
+}
+
+export const health = {
+    check: (serviceUrl) => {
+        const url = serviceUrl || API_BASE
+        return fetch(`${url}/health`, {
+            headers: { 'Authorization': authToken }
+        }).then(r => r.json())
+    }
 }
 
 export const returns = {
