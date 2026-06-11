@@ -13,6 +13,7 @@ import BillingManager from './components/BillingManager'
 import TestRunner from './components/TestRunner'
 import CarrierManager from './components/CarrierManager'
 import AddressTools from './components/AddressTools'
+import LabelManager from './components/LabelManager'
 
 const DEFAULT_API = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const DEFAULT_TOKEN = 'Bearer test-token'
@@ -100,6 +101,8 @@ export default function App() {
         return <CarrierManager />
       case 'address-tools':
         return <AddressTools />
+      case 'labels':
+        return <LabelManager />
       case 'test-runner':
         return <TestRunner />
       case 'settings':
@@ -189,6 +192,14 @@ export default function App() {
               onClick={() => setView('address-tools')}
             >
               📍 Address Tools
+            </button>
+          </li>
+          <li>
+            <button
+              className={`nav-item \${view === 'labels' ? 'active' : ''}`}
+              onClick={() => setView('labels')}
+            >
+              🏷️ Label Center
             </button>
           </li>
           <li>

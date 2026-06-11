@@ -70,13 +70,41 @@ func (s *LabelService) GenerateLabel(ctx context.Context, details map[string]int
 	// For demo, we generate realistic tracking numbers based on carrier
 	trackingNumber := s.generateRealisticTrackingNumber(carrier)
 
-	// Generate PDF using Maroto
+	// Default to the Maroto-generated PDF. For FedEx we may replace both
+	// trackingNumber and pdfData below with the real FedEx response.
 	pdfData, err := s.generateMarotoPDF(details, trackingNumber)
 	if err != nil {
 		return nil, fmt.Errorf("generate maroto pdf: %w", err)
 	}
 
+	// FedEx branch: ask carrier-integration-service to create a real FedEx
+	// shipment and hand us back the official label PDF + tracking number.
+	// If the integration call fails for any reason, we keep the Maroto
+	// fallback so the label pipeline never breaks.
+	labelSource := "maroto"
+	if strings.EqualFold(carrier, "fedex") {
+		if fedexPDF, fedexTracking, fedexErr := s.createFedExShipment(ctx, carrierServiceURL, details); fedexErr != nil {
+			logger.Error("fedex create-shipment call failed, falling back to maroto label",
+				logger.String("shipment_id", shipmentID),
+				logger.String("err", fedexErr.Error()))
+		} else {
+			pdfData = fedexPDF
+			trackingNumber = fedexTracking
+			labelSource = "fedex"
+			logger.Info("fedex label retrieved from carrier-integration-service",
+				logger.String("shipment_id", shipmentID),
+				logger.String("tracking_number", trackingNumber),
+				logger.Int("label_bytes", len(pdfData)))
+		}
+	}
+
 	labelData := base64.StdEncoding.EncodeToString(pdfData)
+
+	// Default fallback URL points to API Gateway download endpoint
+	gatewayURL := "http://localhost:8080"
+	if s.cfg != nil && s.cfg.APIGatewayURL != "" {
+		gatewayURL = strings.TrimRight(s.cfg.APIGatewayURL, "/")
+	}
 
 	label := &domain.ShippingLabel{
 		ID:             utils.GenerateID(),
@@ -84,7 +112,7 @@ func (s *LabelService) GenerateLabel(ctx context.Context, details map[string]int
 		Carrier:        carrier,
 		TrackingNumber: trackingNumber,
 		LabelData:      labelData,
-		LabelURL:       fmt.Sprintf("%s/labels/download/%s", carrierServiceURL, shipmentID),
+		LabelURL:       fmt.Sprintf("%s/labels/%s/download", gatewayURL, shipmentID),
 		Format:         "PDF",
 		Status:         "generated",
 		CreatedAt:      time.Now(),
@@ -94,7 +122,10 @@ func (s *LabelService) GenerateLabel(ctx context.Context, details map[string]int
 		return nil, fmt.Errorf("save label: %w", err)
 	}
 
-	logger.Info("label generated initially with maroto", logger.String("shipment_id", shipmentID), logger.String("carrier", carrier))
+	logger.Info("label generated",
+		logger.String("shipment_id", shipmentID),
+		logger.String("carrier", carrier),
+		logger.String("source", labelSource))
 
 	// If S3 bucket is configured, upload the label PDF to S3 and update LabelURL
 	if s.cfg != nil && s.cfg.S3BucketARN != "" {
@@ -552,6 +583,174 @@ var postalCodeRegex = regexp.MustCompile(`\b\d{5}(?:-\d{4})?\b`)
 
 func extractPostalCode(address string) string {
 	return postalCodeRegex.FindString(address)
+}
+
+// fedexCreateShipmentRequest mirrors the JSON DTO accepted by
+// POST /carriers/fedex/create-shipment in the carrier-integration-service.
+type fedexCreateShipmentRequest struct {
+	AccountNumber                 string          `json:"account_number"`
+	ServiceType                   string          `json:"service_type"`
+	PackagingType                 string          `json:"packaging_type"`
+	Weight                        float64         `json:"weight"`
+	WeightUnits                   string          `json:"weight_units"`
+	Sender                        fedexAddressDTO `json:"sender"`
+	SenderContact                 fedexContactDTO `json:"sender_contact"`
+	Recipient                     fedexAddressDTO `json:"recipient"`
+	RecipientContact              fedexContactDTO `json:"recipient_contact"`
+	IsInternational               bool            `json:"is_international"`
+	TotalCustomsValue             float64         `json:"total_customs_value"`
+	TotalCustomsCurrency          string          `json:"total_customs_currency"`
+	CommodityDescription          string          `json:"commodity_description"`
+	CommodityCountryOfManufacture string          `json:"commodity_country_of_manufacture"`
+	CommodityQuantity             int             `json:"commodity_quantity"`
+	CommodityUnitPrice            float64         `json:"commodity_unit_price"`
+}
+
+type fedexAddressDTO struct {
+	StreetLines     []string `json:"street_lines"`
+	City            string   `json:"city"`
+	StateOrProvince string   `json:"state_or_province_code"`
+	PostalCode      string   `json:"postal_code"`
+	CountryCode     string   `json:"country_code"`
+}
+
+type fedexContactDTO struct {
+	PersonName  string `json:"person_name"`
+	PhoneNumber string `json:"phone_number"`
+	Email       string `json:"email"`
+	CompanyName string `json:"company_name"`
+}
+
+// buildFedExAddressDTO turns a free-form address string into a structured
+// FedEx address by reusing the existing address-line splitter and the
+// postal-code extractor.
+func buildFedExAddressDTO(addr string) fedexAddressDTO {
+	lines := formatAddressLines(addr)
+	postal := extractPostalCode(addr)
+	return fedexAddressDTO{
+		StreetLines: lines,
+		PostalCode:  postal,
+		CountryCode: "US",
+	}
+}
+
+func buildFedExContactDTO(name, email string) fedexContactDTO {
+	return fedexContactDTO{
+		PersonName: name,
+		Email:      email,
+	}
+}
+
+// fedexCreateShipmentResponse mirrors the JSON returned by the
+// carrier-integration-service /carriers/fedex/create-shipment endpoint.
+type fedexCreateShipmentResponse struct {
+	TrackingNumber string `json:"tracking_number"`
+	LabelPDFB64    string `json:"label_pdf_b64"`
+	LabelFormat    string `json:"label_format"`
+	ServiceType    string `json:"service_type"`
+}
+
+// createFedExShipment POSTs the FedEx create-shipment request to the
+// carrier-integration-service and returns the decoded label PDF bytes plus
+// the FedEx master tracking number. The caller is expected to fall back to
+// the Maroto-generated label when this returns an error.
+func (s *LabelService) createFedExShipment(ctx context.Context, carrierServiceURL string, details map[string]interface{}) ([]byte, string, error) {
+	shipmentID, _ := details["shipment_id"].(string)
+	senderName, _ := details["sender_name"].(string)
+	senderAddr, _ := details["sender"].(string)
+	senderEmail, _ := details["sender_email"].(string)
+	receiverName, _ := details["receiver_name"].(string)
+	receiverAddr, _ := details["receiver"].(string)
+	receiverEmail, _ := details["receiver_email"].(string)
+	serviceType, _ := details["service_type"].(string)
+	weightF, _ := details["weight"].(float64)
+	isInternational, _ := details["is_international"].(bool)
+	customsValue, _ := details["customs_value"].(float64)
+	customsCurrency, _ := details["customs_currency"].(string)
+	commodityDescription, _ := details["description"].(string)
+
+	// Default to FedEx Ground for domestic; INTERNATIONAL_PRIORITY for international
+	if serviceType == "" {
+		if isInternational {
+			serviceType = "INTERNATIONAL_PRIORITY"
+		} else {
+			serviceType = "FEDEX_GROUND"
+		}
+	}
+
+	if customsCurrency == "" {
+		customsCurrency = "USD"
+	}
+	if commodityDescription == "" {
+		commodityDescription = "Shipping Items"
+	}
+
+	payload := fedexCreateShipmentRequest{
+		AccountNumber:  "740561073", // sandbox account, matches Python script
+		ServiceType:    serviceType,
+		PackagingType:  "YOUR_PACKAGING",
+		Weight:         weightF,
+		WeightUnits:    "LB",
+		Sender:         buildFedExAddressDTO(senderAddr),
+		SenderContact:  buildFedExContactDTO(senderName, senderEmail),
+		Recipient:      buildFedExAddressDTO(receiverAddr),
+		RecipientContact: buildFedExContactDTO(receiverName, receiverEmail),
+		IsInternational:  isInternational,
+		TotalCustomsValue: customsValue,
+		TotalCustomsCurrency: customsCurrency,
+		CommodityDescription: commodityDescription,
+		CommodityQuantity: 1,
+		CommodityUnitPrice: customsValue,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", fmt.Errorf("marshal fedex request: %w", err)
+	}
+
+	endpoint := strings.TrimRight(carrierServiceURL, "/") + "/carriers/fedex/create-shipment"
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, "", fmt.Errorf("build fedex http request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("call fedex endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("fedex endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	var parsed fedexCreateShipmentResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, "", fmt.Errorf("decode fedex response: %w", err)
+	}
+	if parsed.LabelPDFB64 == "" {
+		return nil, "", fmt.Errorf("fedex response missing label_pdf_b64")
+	}
+	if parsed.TrackingNumber == "" {
+		return nil, "", fmt.Errorf("fedex response missing tracking_number")
+	}
+
+	pdfBytes, err := base64.StdEncoding.DecodeString(parsed.LabelPDFB64)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode fedex label pdf: %w", err)
+	}
+
+	logger.Info("fedex create-shipment succeeded",
+		logger.String("shipment_id", shipmentID),
+		logger.String("tracking_number", parsed.TrackingNumber),
+		logger.String("label_format", parsed.LabelFormat),
+		logger.Int("label_bytes", len(pdfBytes)))
+
+	return pdfBytes, parsed.TrackingNumber, nil
 }
 
 func (s *LabelService) GetLabel(ctx context.Context, shipmentID string) (*domain.ShippingLabel, error) {

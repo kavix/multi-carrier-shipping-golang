@@ -117,6 +117,10 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                             <label>Receiver Address</label>
                             <input value={editForm.receiver_address} onChange={e => setEditForm({...editForm, receiver_address: e.target.value})} />
                         </div>
+                        <div className="form-group">
+                            <label>Item Description</label>
+                            <input value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+                        </div>
                         <div className="form-row">
                             <div className="form-group">
                                 <label>Weight (kg)</label>
@@ -173,6 +177,19 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                                 <span className="label">Service Type:</span>
                                 <span className="value">{shipment.service_type}</span>
                             </div>
+                            <div className="info-row">
+                                <span className="label">Description:</span>
+                                <span className="value">{shipment.description || 'No description'}</span>
+                            </div>
+                            {shipment.is_international && (
+                                <div className="info-row">
+                                    <span className="label">Customs:</span>
+                                    <span className="value">
+                                        <span style={{ color: '#059669', fontWeight: 600 }}>International</span> 
+                                        ({shipment.customs_value} {shipment.customs_currency})
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 

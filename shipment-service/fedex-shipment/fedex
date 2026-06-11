@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+import sys
+import subprocess
+import os
+
+def main():
+    # Path to the main.py script
+    main_py = os.path.join(os.path.dirname(__file__), "main.py")
+    
+    # Run main.py with the same arguments
+    result = subprocess.run([sys.executable, main_py] + sys.argv[1:])
+    sys.exit(result.returncode)
+
+if __name__ == "__main__":
+    main()

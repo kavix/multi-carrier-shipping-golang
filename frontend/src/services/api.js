@@ -36,6 +36,7 @@ export const shipments = {
     get: (id) => apiCall('GET', `/shipments/${id}`),
     update: (id, payload) => apiCall('PUT', `/shipments/${id}`, payload),
     updateStatus: (id, status) => apiCall('PATCH', `/shipments/${id}/status`, { status }),
+    delete: (id) => apiCall('DELETE', `/shipments/${id}`),
 }
 
 export const carriers = {
