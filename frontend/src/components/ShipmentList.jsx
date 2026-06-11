@@ -41,6 +41,16 @@ export default function ShipmentList({ onSelectShipment }) {
         return colors[status] || '#6b7280'
     }
 
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this shipment?')) return
+        try {
+            await shipments.delete(id)
+            loadShipments()
+        } catch (err) {
+            alert('Failed to delete shipment: ' + err.message)
+        }
+    }
+
     if (loading) return <div className="loading">Loading shipments...</div>
 
     return (
@@ -115,12 +125,23 @@ export default function ShipmentList({ onSelectShipment }) {
                                     </td>
                                     <td className="text-muted">{new Date(shipment.created_at).toLocaleDateString()}</td>
                                     <td>
-                                        <button
-                                            className="btn btn-sm btn-secondary"
-                                            onClick={() => onSelectShipment(shipment.id)}
-                                        >
-                                            View
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '5px' }}>
+                                            <button
+                                                className="btn btn-sm btn-secondary"
+                                                onClick={() => onSelectShipment(shipment.id)}
+                                            >
+                                                View
+                                            </button>
+                                            {shipment.status === 'pending' && (
+                                                <button
+                                                    className="btn btn-sm btn-secondary"
+                                                    style={{ color: '#ef4444' }}
+                                                    onClick={() => handleDelete(shipment.id)}
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

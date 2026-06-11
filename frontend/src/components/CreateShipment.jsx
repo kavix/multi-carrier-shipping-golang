@@ -11,10 +11,14 @@ export default function CreateShipment({ onSuccess, onCancel }) {
         receiver_email: '',
         weight: '',
         dimensions: '',
+        description: '',
         carrier: 'dhl',
         service_type: 'standard',
         pickup_location_id: '',
         drop_location_id: '',
+        is_international: false,
+        customs_value: '',
+        customs_currency: 'USD',
     })
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
@@ -74,7 +78,8 @@ export default function CreateShipment({ onSuccess, onCancel }) {
 
             const payload = {
                 ...formData,
-                weight: parseFloat(formData.weight)
+                weight: parseFloat(formData.weight),
+                customs_value: formData.customs_value ? parseFloat(formData.customs_value) : 0
             }
 
             const result = await shipments.create(payload)
@@ -176,49 +181,20 @@ export default function CreateShipment({ onSuccess, onCancel }) {
 
                 <fieldset>
                     <legend>Package Details</legend>
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="weight">Weight (kg) *</label>
-                            <input
-                                type="number"
-                                id="weight"
-                                name="weight"
-                                value={formData.weight}
-                                onChange={handleChange}
-                                required
-                                step="0.1"
-                                min="0"
-                                placeholder="2.5"
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="dimensions">Dimensions</label>
-                            <input
-                                type="text"
-                                id="dimensions"
-                                name="dimensions"
-                                value={formData.dimensions}
-                                onChange={handleChange}
-                                placeholder="10x10x10 cm"
-                            />
-                        </div>
+                    <div className="form-group">
+                        <label htmlFor="description">Item Description *</label>
+                        <input
+                            type="text"
+                            id="description"
+                            name="description"
+                            value={formData.description}
+                            onChange={handleChange}
+                            required
+                            placeholder="e.g. Books, Electronics, Clothing"
+                        />
                     </div>
                     <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="carrier">Carrier *</label>
-                            <select
-                                id="carrier"
-                                name="carrier"
-                                value={formData.carrier}
-                                onChange={handleChange}
-                                required
-                            >
-                                <option value="dhl">DHL</option>
-                                <option value="fedex">FedEx</option>
-                                <option value="ups">UPS</option>
-                                <option value="usps">USPS</option>
-                            </select>
-                        </div>
+...
                         <div className="form-group">
                             <label htmlFor="service_type">Service Type *</label>
                             <select
@@ -228,13 +204,57 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                 onChange={handleChange}
                                 required
                             >
-                                <option value="standard">Standard</option>
-                                <option value="express">Express</option>
+                                <option value="standard">Standard / Ground</option>
+                                <option value="express">Express / Air</option>
                                 <option value="overnight">Overnight</option>
                                 <option value="economy">Economy</option>
                             </select>
                         </div>
                     </div>
+
+                    <div className="form-group" style={{ marginTop: '16px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                name="is_international"
+                                checked={formData.is_international}
+                                onChange={e => setFormData(prev => ({ ...prev, is_international: e.target.checked }))}
+                                style={{ width: 'auto' }}
+                            />
+                            International Shipment (Requires Customs Data)
+                        </label>
+                    </div>
+
+                    {formData.is_international && (
+                        <div className="form-row" style={{ marginTop: '12px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                            <div className="form-group">
+                                <label htmlFor="customs_value">Total Customs Value *</label>
+                                <input
+                                    type="number"
+                                    id="customs_value"
+                                    name="customs_value"
+                                    value={formData.customs_value}
+                                    onChange={handleChange}
+                                    required={formData.is_international}
+                                    placeholder="100.00"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="customs_currency">Currency</label>
+                                <select
+                                    id="customs_currency"
+                                    name="customs_currency"
+                                    value={formData.customs_currency}
+                                    onChange={handleChange}
+                                >
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="GBP">GBP</option>
+                                    <option value="LKR">LKR</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
                 </fieldset>
 
                 {formData.carrier === 'fedex' && (

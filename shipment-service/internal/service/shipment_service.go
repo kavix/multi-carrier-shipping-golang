@@ -48,10 +48,14 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 		ReceiverEmail:    req.ReceiverEmail,
 		Weight:           req.Weight,
 		Dimensions:       req.Dimensions,
+		Description:      req.Description,
 		Carrier:          req.Carrier,
 		ServiceType:      req.ServiceType,
 		PickupLocationID: req.PickupLocationID,
 		DropLocationID:   req.DropLocationID,
+		IsInternational:  req.IsInternational,
+		CustomsValue:     req.CustomsValue,
+		CustomsCurrency:  req.CustomsCurrency,
 		Status:           string(domain.StatusPending),
 		TrackingNumber:   "",
 		Cost:             0,
@@ -70,6 +74,7 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 		"carrier":            shipment.Carrier,
 		"service_type":       shipment.ServiceType,
 		"status":             shipment.Status,
+		"description":        shipment.Description,
 		"sender_name":        shipment.SenderName,
 		"sender":             shipment.SenderAddress,
 		"receiver_name":      shipment.ReceiverName,
@@ -79,6 +84,9 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 		"weight":             shipment.Weight,
 		"pickup_location_id": shipment.PickupLocationID,
 		"drop_location_id":   shipment.DropLocationID,
+		"is_international":   shipment.IsInternational,
+		"customs_value":      shipment.CustomsValue,
+		"customs_currency":   shipment.CustomsCurrency,
 		"event_type":         "shipment.created",
 	}
 	if err := s.createdProducer.Publish(ctx, shipment.ID, event); err != nil {
@@ -213,10 +221,14 @@ type CreateShipmentRequest struct {
 	ReceiverEmail    string  `json:"receiver_email"`
 	Weight           float64 `json:"weight" binding:"required,gt=0"`
 	Dimensions       string  `json:"dimensions"`
+	Description      string  `json:"description"`
 	Carrier          string  `json:"carrier" binding:"required"`
 	ServiceType      string  `json:"service_type" binding:"required"`
 	PickupLocationID string  `json:"pickup_location_id"`
 	DropLocationID   string  `json:"drop_location_id"`
+	IsInternational  bool    `json:"is_international"`
+	CustomsValue     float64 `json:"customs_value"`
+	CustomsCurrency  string  `json:"customs_currency"`
 }
 
 type UpdateShipmentRequest struct {
@@ -228,6 +240,7 @@ type UpdateShipmentRequest struct {
 	ReceiverEmail   string  `json:"receiver_email"`
 	Weight          float64 `json:"weight"`
 	Dimensions      string  `json:"dimensions"`
+	Description     string  `json:"description"`
 	Carrier         string  `json:"carrier"`
 	ServiceType     string  `json:"service_type"`
 }

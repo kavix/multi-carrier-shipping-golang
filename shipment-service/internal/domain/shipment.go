@@ -16,12 +16,16 @@ type Shipment struct {
 	Carrier          string    `json:"carrier" db:"carrier"`
 	ServiceType      string    `json:"service_type" db:"service_type"`
 	Status           string    `json:"status" db:"status"`
+	Description      string    `json:"description" db:"description"`
 	TrackingNumber   string    `json:"tracking_number" db:"tracking_number"`
 	LabelID          string    `json:"label_id" db:"label_id"`
 	LabelURL         string    `json:"label_url" db:"label_url"`
 	Cost             float64   `json:"cost" db:"cost"`
 	PickupLocationID string    `json:"pickup_location_id" db:"pickup_location_id"`
 	DropLocationID   string    `json:"drop_location_id" db:"drop_location_id"`
+	IsInternational  bool      `json:"is_international" db:"is_international"`
+	CustomsValue     float64   `json:"customs_value" db:"customs_value"`
+	CustomsCurrency  string    `json:"customs_currency" db:"customs_currency"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
 }

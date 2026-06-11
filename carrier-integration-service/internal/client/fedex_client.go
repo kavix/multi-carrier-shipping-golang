@@ -2,10 +2,13 @@ package client
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/shipping/carrier-integration-service/internal/domain"
@@ -356,4 +359,293 @@ func (c *FedExClient) ValidatePostalCode(countryCode, postalCode string) (bool, 
 	// If there are alerts, it might mean the postal code is problematic
 	// In a real scenario, we would check specific alert codes
 	return len(postResp.Output.Alerts) == 0, nil
+}
+
+// FedExAddress represents a structured address for FedEx Ship API
+type FedExAddress struct {
+	StreetLines       []string `json:"streetLines"`
+	City              string   `json:"city"`
+	StateOrProvince   string   `json:"stateOrProvinceCode,omitempty"`
+	PostalCode        string   `json:"postalCode"`
+	CountryCode       string   `json:"countryCode"`
+}
+
+func (a FedExAddress) toMap() map[string]interface{} {
+	m := map[string]interface{}{
+		"countryCode": a.CountryCode,
+		"postalCode":  a.PostalCode,
+	}
+	if len(a.StreetLines) > 0 {
+		m["streetLines"] = a.StreetLines
+	}
+	if a.City != "" {
+		m["city"] = a.City
+	}
+	if a.StateOrProvince != "" {
+		m["stateOrProvinceCode"] = a.StateOrProvince
+	}
+	return m
+}
+
+// FedExContact represents a contact for FedEx Ship API
+type FedExContact struct {
+	PersonName  string
+	PhoneNumber string
+	Email       string
+	CompanyName string
+}
+
+func (c FedExContact) toMap() map[string]interface{} {
+	m := map[string]interface{}{}
+	if c.PersonName != "" {
+		m["personName"] = c.PersonName
+	}
+	if c.PhoneNumber != "" {
+		m["phoneNumber"] = c.PhoneNumber
+	}
+	if c.Email != "" {
+		m["email"] = c.Email
+	}
+	if c.CompanyName != "" {
+		m["companyName"] = c.CompanyName
+	}
+	return m
+}
+
+// CreateShipmentInput is the input for FedEx shipment creation
+type CreateShipmentInput struct {
+	AccountNumber string
+	ServiceType   string // e.g. "FEDEX_GROUND", "INTERNATIONAL_PRIORITY"
+	PackagingType string // defaults to "YOUR_PACKAGING"
+	Weight        float64
+	WeightUnits   string // e.g. "LB", "KG", defaults to "LB"
+
+	Sender    FedExAddress
+	SenderContact FedExContact
+
+	Recipient FedExAddress
+	RecipientContact FedExContact
+
+	// Optional commodity info for international shipments
+	IsInternational      bool
+	TotalCustomsValue    float64
+	TotalCustomsCurrency string
+	CommodityDescription string
+	CommodityCountryOfManufacture string
+	CommodityQuantity    int
+	CommodityUnitPrice   float64
+}
+
+// CreateShipmentResult is the response from FedEx shipment creation
+type CreateShipmentResult struct {
+	TrackingNumber string
+	LabelPDF       []byte // decoded label PDF
+	LabelFormat    string
+	ServiceType    string
+}
+
+// CreateShipment calls FedEx's /ship/v1/shipments endpoint to create a real
+// shipment, returning the master tracking number and the decoded label PDF.
+// Mirrors the behaviour of the Python prototype in fedex-shipment/fedex_shipment.py.
+func (c *FedExClient) CreateShipment(ctx context.Context, in CreateShipmentInput) (*CreateShipmentResult, error) {
+	token, err := c.getAuthToken()
+	if err != nil {
+		return nil, fmt.Errorf("fedex auth: %w", err)
+	}
+
+	if in.AccountNumber == "" {
+		return nil, fmt.Errorf("fedex account number is required")
+	}
+	if in.ServiceType == "" {
+		in.ServiceType = "FEDEX_GROUND"
+	}
+	if in.PackagingType == "" {
+		in.PackagingType = "YOUR_PACKAGING"
+	}
+	if in.WeightUnits == "" {
+		in.WeightUnits = "LB"
+	}
+	if in.Weight <= 0 {
+		in.Weight = 1.0
+	}
+
+	recipientEntry := map[string]interface{}{
+		"address": in.Recipient.toMap(),
+	}
+	if contact := in.RecipientContact.toMap(); len(contact) > 0 {
+		recipientEntry["contact"] = contact
+	}
+
+	requestedShipment := map[string]interface{}{
+		"shipper": map[string]interface{}{
+			"address": in.Sender.toMap(),
+		},
+		"recipients":     []interface{}{recipientEntry},
+		"shipDatestamp":  time.Now().Format("2006-01-02"),
+		"serviceType":    in.ServiceType,
+		"packagingType":  in.PackagingType,
+		"pickupType":     "USE_SCHEDULED_PICKUP",
+		"shippingChargesPayment": map[string]interface{}{
+			"paymentType": "SENDER",
+			"payor": map[string]interface{}{
+				"responsibleParty": map[string]interface{}{
+					"accountNumber": map[string]interface{}{"value": in.AccountNumber},
+				},
+			},
+		},
+		"labelSpecification": map[string]interface{}{
+			"labelFormatType": "COMMON2D",
+			"imageType":       "PDF",
+			"labelStockType":  "PAPER_4X6",
+		},
+		"requestedPackageLineItems": []interface{}{
+			map[string]interface{}{
+				"weight": map[string]interface{}{
+					"units": in.WeightUnits,
+					"value": in.Weight,
+				},
+			},
+		},
+	}
+
+	if in.SenderContact.PersonName != "" || in.SenderContact.PhoneNumber != "" || in.SenderContact.CompanyName != "" {
+		requestedShipment["shipper"].(map[string]interface{})["contact"] = in.SenderContact.toMap()
+	}
+
+	// Add customs clearance for international shipments
+	if in.IsInternational {
+		currency := in.TotalCustomsCurrency
+		if currency == "" {
+			currency = "USD"
+		}
+		qty := in.CommodityQuantity
+		if qty <= 0 {
+			qty = 1
+		}
+		unitPrice := in.CommodityUnitPrice
+		if unitPrice <= 0 {
+			unitPrice = in.TotalCustomsValue
+		}
+		commodityDesc := in.CommodityDescription
+		if commodityDesc == "" {
+			commodityDesc = "Merchandise"
+		}
+		commodityCountry := in.CommodityCountryOfManufacture
+		if commodityCountry == "" {
+			commodityCountry = in.Sender.CountryCode
+		}
+
+		requestedShipment["customsClearanceDetail"] = map[string]interface{}{
+			"dutiesPayment": map[string]interface{}{
+				"paymentType": "SENDER",
+				"payor": map[string]interface{}{
+					"responsibleParty": map[string]interface{}{
+						"accountNumber": map[string]interface{}{"value": in.AccountNumber},
+					},
+				},
+			},
+			"documentContent": "NON_DOCUMENTS",
+			"totalCustomsValue": map[string]interface{}{
+				"amount":   in.TotalCustomsValue,
+				"currency": currency,
+			},
+			"commodities": []interface{}{
+				map[string]interface{}{
+					"description":        commodityDesc,
+					"countryOfManufacture": commodityCountry,
+					"quantity":           qty,
+					"quantityUnits":      "PCS",
+					"unitPrice":          map[string]interface{}{"amount": unitPrice, "currency": currency},
+					"customsValue":       map[string]interface{}{"amount": unitPrice, "currency": currency},
+					"weight":             map[string]interface{}{"units": in.WeightUnits, "value": in.Weight},
+				},
+			},
+		}
+	}
+
+	payload := map[string]interface{}{
+		"labelResponseOptions": "LABEL",
+		"requestedShipment":    requestedShipment,
+		"accountNumber":        map[string]interface{}{"value": in.AccountNumber},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal fedex request: %w", err)
+	}
+
+	logger.Info("calling fedex create shipment", logger.String("service_type", in.ServiceType), logger.Float64("weight", in.Weight))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/ship/v1/shipments", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build fedex request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fedex request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Capture the response body for diagnostics
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(resp.Body)
+		logger.Error("fedex create shipment failed", logger.String("status", fmt.Sprintf("%d", resp.StatusCode)), logger.String("body", buf.String()))
+		return nil, fmt.Errorf("fedex create shipment returned status %d: %s", resp.StatusCode, strings.TrimSpace(buf.String()))
+	}
+
+	var parsed struct {
+		Output struct {
+			TransactionShipments []struct {
+				MasterTrackingNumber string `json:"masterTrackingNumber"`
+				ServiceType          string `json:"serviceType"`
+				PieceResponses       []struct {
+					PackageDocuments []struct {
+						EncodedLabel string `json:"encodedLabel"`
+						ContentType  string `json:"contentType"`
+					} `json:"packageDocuments"`
+				} `json:"pieceResponses"`
+			} `json:"transactionShipments"`
+		} `json:"output"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("decode fedex response: %w", err)
+	}
+
+	txns := parsed.Output.TransactionShipments
+	if len(txns) == 0 {
+		return nil, fmt.Errorf("fedex response contained no transactionShipments")
+	}
+	txn := txns[0]
+	if txn.MasterTrackingNumber == "" {
+		return nil, fmt.Errorf("fedex response missing masterTrackingNumber")
+	}
+	if len(txn.PieceResponses) == 0 || len(txn.PieceResponses[0].PackageDocuments) == 0 {
+		return nil, fmt.Errorf("fedex response missing packageDocuments")
+	}
+
+	encoded := txn.PieceResponses[0].PackageDocuments[0].EncodedLabel
+	if encoded == "" {
+		return nil, fmt.Errorf("fedex response missing encodedLabel")
+	}
+	pdfBytes, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decode fedex label: %w", err)
+	}
+
+	result := &CreateShipmentResult{
+		TrackingNumber: txn.MasterTrackingNumber,
+		LabelPDF:       pdfBytes,
+		LabelFormat:    txn.PieceResponses[0].PackageDocuments[0].ContentType,
+		ServiceType:    txn.ServiceType,
+	}
+	if result.LabelFormat == "" {
+		result.LabelFormat = "application/pdf"
+	}
+	logger.Info("fedex shipment created", logger.String("tracking_number", result.TrackingNumber), logger.Int("label_bytes", len(pdfBytes)))
+	return result, nil
 }

@@ -104,3 +104,19 @@ func (s *CarrierService) ValidatePostalCode(ctx context.Context, carrierCode, co
 	}
 	return c.ValidatePostalCode(countryCode, postalCode)
 }
+
+// CreateFedExShipment loads the active FedEx carrier, builds a FedEx client
+// with its credentials, and calls the FedEx Ship API to create a real shipment.
+// The returned result contains the FedEx master tracking number and the
+// decoded label PDF so the calling service can upload it to S3.
+func (s *CarrierService) CreateFedExShipment(ctx context.Context, input client.CreateShipmentInput) (*client.CreateShipmentResult, error) {
+	carrier, err := s.repo.GetByCode(ctx, "fedex")
+	if err != nil {
+		return nil, fmt.Errorf("lookup fedex carrier: %w", err)
+	}
+	if !carrier.IsActive {
+		return nil, fmt.Errorf("fedex carrier is not active")
+	}
+	fedex := client.NewFedExClient(carrier.APIKey, carrier.APISecret, carrier.BaseURL)
+	return fedex.CreateShipment(ctx, input)
+}

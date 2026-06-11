@@ -14,6 +14,7 @@ type Config struct {
 	AWSRegion    string
 	AWSAccessKey string
 	AWSSecretKey string
+	APIGatewayURL string
 }
 
 func Load() *Config {
@@ -34,6 +35,7 @@ func Load() *Config {
 		AWSRegion:    getEnv("AWS_REGION", "us-east-1"),
 		AWSAccessKey: os.Getenv("AWS_ACCESS_KEY_ID"),
 		AWSSecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		APIGatewayURL: getEnv("API_GATEWAY_URL", "http://localhost:8080"),
 	}
 }
 
