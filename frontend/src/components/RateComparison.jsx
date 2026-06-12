@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { shipments, rates } from '../services/api'
 
-export default function RateComparison() {
+export default function RateComparison({ initialShipmentId }) {
     const [shipmentList, setShipmentList] = useState([])
     const [selectedShipmentId, setSelectedShipmentId] = useState('')
     const [fromAddress, setFromAddress] = useState('')
@@ -16,6 +16,18 @@ export default function RateComparison() {
     useEffect(() => {
         loadShipments()
     }, [])
+
+    useEffect(() => {
+        if (initialShipmentId && shipmentList.length > 0) {
+            const selected = shipmentList.find(s => s.id === initialShipmentId)
+            if (selected) {
+                setSelectedShipmentId(initialShipmentId)
+                setFromAddress(selected.sender_address || '')
+                setToAddress(selected.receiver_address || '')
+                setWeight(selected.weight || 1.0)
+            }
+        }
+    }, [initialShipmentId, shipmentList])
 
     const loadShipments = async () => {
         try {
@@ -50,7 +62,7 @@ export default function RateComparison() {
     }
 
     const handleCompare = async (e) => {
-        e.preventDefault()
+        if (e) e.preventDefault()
         if (!fromAddress || !toAddress || !weight) {
             setError('Please fill in all comparison fields')
             return
@@ -61,7 +73,6 @@ export default function RateComparison() {
             setResults(null)
             setError(null)
             
-            // If no shipment was selected, generate a dummy ID for the comparison record
             const idToUse = selectedShipmentId || `TEMP-${Date.now()}`
 
             const data = await rates.compare({
@@ -71,7 +82,6 @@ export default function RateComparison() {
                 weight: parseFloat(weight)
             })
 
-            // Parse all_rates_json if present
             let parsedRates = []
             if (data.all_rates_json) {
                 try {
@@ -110,7 +120,7 @@ export default function RateComparison() {
             <div className="list-header" style={{ marginBottom: '24px' }}>
                 <div>
                     <h1>Compare Carrier Rates</h1>
-                    <p style={{ color: '#6b7280', margin: '4px 0 0 0' }}>
+                    <p className="subtitle">
                         Calculate and compare shipping costs across different carriers in real-time
                     </p>
                 </div>
@@ -119,9 +129,9 @@ export default function RateComparison() {
             {error && <div className="alert alert-error">{error}</div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', alignItems: 'start' }}>
-                {/* Form Section */}
-                <div className="detail-section" style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-                    <h2 style={{ fontSize: '18px', margin: '0 0 20px 0', borderBottom: '2px solid #f3f4f6', paddingBottom: '12px' }}>
+                {/* Parameters Card */}
+                <div className="detail-section card" style={{ padding: '28px' }}>
+                    <h2 style={{ fontSize: '18px', margin: '0 0 20px 0', borderBottom: '2px solid var(--border-color)', paddingBottom: '12px' }}>
                         Shipping Parameters
                     </h2>
                     
@@ -140,7 +150,7 @@ export default function RateComparison() {
                                     </option>
                                 ))}
                             </select>
-                            {loadingShipments && <small>Loading shipments...</small>}
+                            {loadingShipments && <small>Loading active shipments...</small>}
                         </div>
 
                         <div className="form-group">
@@ -192,21 +202,21 @@ export default function RateComparison() {
                     </form>
                 </div>
 
-                {/* Results Section */}
+                {/* Results Card */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     {comparing && (
                         <div className="empty-state" style={{ padding: '64px 32px' }}>
-                            <div className="loading" style={{ padding: '0' }}>
-                                🌀 Fetching live carrier rates...
+                            <div className="loading" style={{ padding: '0', fontWeight: 'bold' }}>
+                                🌀 Fetching live carrier quotes...
                             </div>
                         </div>
                     )}
 
                     {!comparing && !results && (
                         <div className="empty-state" style={{ padding: '64px 32px' }}>
-                            <p style={{ fontSize: '16px', fontWeight: '500', margin: '0 0 8px 0' }}>No comparison calculated yet</p>
-                            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0' }}>
-                                Enter details or select an existing shipment, then click Compare Rates to fetch carrier options.
+                            <p style={{ fontSize: '16px', fontWeight: '700', margin: '0 0 8px 0', color: 'var(--text-main)' }}>No quote comparison calculated</p>
+                            <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', margin: '0' }}>
+                                Select a shipment or enter custom parameters to compare routing costs across microservice gateways.
                             </p>
                         </div>
                     )}
@@ -215,31 +225,32 @@ export default function RateComparison() {
                         <>
                             {/* Best Rate Highlight */}
                             <div 
-                                className="stat-card" 
+                                className="card" 
                                 style={{ 
                                     background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
                                     color: 'white', 
                                     border: 'none',
-                                    boxShadow: '0 8px 20px rgba(16, 185, 129, 0.25)' 
+                                    padding: '28px',
+                                    boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)' 
                                 }}
                             >
-                                <span style={{ fontSize: '12px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.05em', backgroundColor: 'rgba(255, 255, 255, 0.2)', padding: '4px 10px', borderRadius: '12px', display: 'inline-block', marginBottom: '12px' }}>
+                                <span style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.05em', backgroundColor: 'rgba(255, 255, 255, 0.2)', padding: '4px 10px', borderRadius: '12px', display: 'inline-block', marginBottom: '12px' }}>
                                     Cheapest & Recommended Option
                                 </span>
-                                <div style={{ fontSize: '36px', fontWeight: '800', marginBottom: '4px' }}>
+                                <div style={{ fontSize: '38px', fontWeight: '800', marginBottom: '4px', letterSpacing: '-1px' }}>
                                     ${results.best.cost.toFixed(2)}
                                 </div>
-                                <div style={{ fontSize: '18px', fontWeight: '600', textTransform: 'capitalize' }}>
-                                    {results.best.carrier} — {results.best.service}
+                                <div style={{ fontSize: '19px', fontWeight: '700', textTransform: 'uppercase' }}>
+                                    {results.best.carrier} — {results.best.service?.replace(/_/g, ' ')}
                                 </div>
                                 <p style={{ fontSize: '14px', margin: '8px 0 0 0', opacity: '0.9' }}>
                                     Estimated Delivery: <strong>{results.best.days} {results.best.days === 1 ? 'day' : 'days'}</strong>
                                 </p>
                             </div>
 
-                            {/* Comparison Grid */}
-                            <div className="detail-section" style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-                                <h2 style={{ fontSize: '16px', margin: '0 0 16px 0', borderBottom: '2px solid #f3f4f6', paddingBottom: '12px' }}>
+                            {/* Comparison Quotes */}
+                            <div className="detail-section card" style={{ padding: '24px' }}>
+                                <h2 style={{ fontSize: '16px', margin: '0 0 20px 0', borderBottom: '2px solid var(--border-color)', paddingBottom: '12px' }}>
                                     All Carrier Quotes ({results.allRates.length})
                                 </h2>
                                 
@@ -256,21 +267,20 @@ export default function RateComparison() {
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
                                                     padding: '16px',
-                                                    borderRadius: '8px',
-                                                    border: `2px solid ${isBest ? '#10b981' : '#e5e7eb'}`,
+                                                    borderRadius: '12px',
+                                                    border: `2px solid ${isBest ? '#10b981' : 'var(--border-color)'}`,
                                                     background: isBest ? '#f0fdf4' : '#fff',
                                                     transition: 'all 0.2s',
-                                                    position: 'relative'
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                                    {/* Custom Carrier Logo Simulation */}
                                                     <div 
                                                         style={{
                                                             width: '56px',
                                                             height: '40px',
-                                                            borderRadius: '6px',
-                                                            border: `1px solid ${brand.border}`,
+                                                            borderRadius: '8px',
+                                                            border: `1.5px solid ${brand.border}`,
                                                             backgroundColor: brand.bg,
                                                             display: 'flex',
                                                             alignItems: 'center',
@@ -285,25 +295,25 @@ export default function RateComparison() {
                                                     </div>
                                                     
                                                     <div>
-                                                        <div style={{ fontWeight: '700', color: '#1f2937', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            {rate.carrier_name}
+                                                        <div style={{ fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            {rate.carrier_name?.toUpperCase()}
                                                             {isBest && (
-                                                                <span style={{ fontSize: '10px', color: '#10b981', background: '#dcfce7', padding: '2px 6px', borderRadius: '10px', fontWeight: '600' }}>
+                                                                <span style={{ fontSize: '10px', color: '#10b981', background: '#dcfce7', padding: '2px 6px', borderRadius: '10px', fontWeight: '700' }}>
                                                                     Cheapest
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div style={{ fontSize: '13px', color: '#6b7280', textTransform: 'capitalize' }}>
-                                                            {rate.service_type} • {rate.estimated_days} {rate.estimated_days === 1 ? 'day' : 'days'}
+                                                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                                                            {rate.service_type?.replace(/_/g, ' ')} • {rate.estimated_days} {rate.estimated_days === 1 ? 'day' : 'days'}
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ fontSize: '20px', fontWeight: '800', color: isBest ? '#15803d' : '#1f2937' }}>
+                                                    <div style={{ fontSize: '20px', fontWeight: '800', color: isBest ? '#15803d' : 'var(--text-main)' }}>
                                                         ${rate.cost.toFixed(2)}
                                                     </div>
-                                                    <div style={{ fontSize: '11px', color: '#f59e0b' }}>
+                                                    <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '2px' }}>
                                                         {'★'.repeat(Math.round(rate.rating || 5)) + '☆'.repeat(5 - Math.round(rate.rating || 5))}
                                                     </div>
                                                 </div>
