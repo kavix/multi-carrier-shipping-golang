@@ -53,7 +53,7 @@ fi
 
 # Start all services
 print_info "Starting all services, databases, and infrastructure..."
-docker compose up -d
+docker compose up --build -d
 
 print_success "All containers started"
 
