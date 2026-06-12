@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { shipments, returns, billing, health } from '../services/api'
+import { shipments, billing, health } from '../services/api'
 
 export default function Dashboard({ onSelectShipment }) {
     const [stats, setStats] = useState({
@@ -86,41 +86,74 @@ export default function Dashboard({ onSelectShipment }) {
         setServiceHealth(healthStatus)
     }
 
+    const getStatusColor = (status) => {
+        const colors = {
+            pending: '#f59e0b',
+            validated: '#3b82f6',
+            created: '#10b981',
+            processing: '#3b82f6',
+            delivered: '#10b981',
+            cancelled: '#ef4444',
+        }
+        return colors[status] || '#6b7280'
+    }
+
     if (loading) return <div className="loading">Loading dashboard...</div>
 
     return (
         <div className="dashboard">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <h1>Platform Dashboard</h1>
-                <button className="btn btn-outline btn-sm" onClick={loadDashboard}>🔄 Refresh Data</button>
+            <div className="list-header">
+                <div>
+                    <h1>Platform Dashboard</h1>
+                    <p className="subtitle">Overview of shipments, payments, and microservices status</p>
+                </div>
+                <button className="btn btn-outline" onClick={loadDashboard}>🔄 Refresh Data</button>
             </div>
 
             {error && <div className="alert alert-error">{error}</div>}
 
             <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-number">{stats.totalShipments}</div>
-                    <div className="stat-label">Total Shipments</div>
+                <div className="stat-card" style={{ borderTopColor: '#3b82f6' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <div className="stat-number" style={{ color: '#3b82f6' }}>{stats.totalShipments}</div>
+                            <div className="stat-label">Total Shipments</div>
+                        </div>
+                        <span style={{ fontSize: '32px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.08))' }}>📦</span>
+                    </div>
                 </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-                    <div className="stat-number" style={{ color: '#f59e0b' }}>{stats.pendingShipments}</div>
-                    <div className="stat-label">Active / Pending</div>
+                <div className="stat-card" style={{ borderTopColor: '#f59e0b' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <div className="stat-number" style={{ color: '#f59e0b' }}>{stats.pendingShipments}</div>
+                            <div className="stat-label">Active / Pending</div>
+                        </div>
+                        <span style={{ fontSize: '32px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.08))' }}>⏳</span>
+                    </div>
                 </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid #10b981' }}>
-                    <div className="stat-number" style={{ color: '#10b981' }}>{stats.deliveredToday}</div>
-                    <div className="stat-label">Delivered</div>
+                <div className="stat-card" style={{ borderTopColor: '#10b981' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <div className="stat-number" style={{ color: '#10b981' }}>{stats.deliveredToday}</div>
+                            <div className="stat-label">Delivered</div>
+                        </div>
+                        <span style={{ fontSize: '32px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.08))' }}>✅</span>
+                    </div>
                 </div>
-                <div className="stat-card" style={{ borderLeft: '4px solid #ef4444' }}>
-                    <div className="stat-number" style={{ color: '#ef4444' }}>{stats.pendingInvoices}</div>
-                    <div className="stat-label">Unpaid Invoices</div>
+                <div className="stat-card" style={{ borderTopColor: '#ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <div className="stat-number" style={{ color: '#ef4444' }}>{stats.pendingInvoices}</div>
+                            <div className="stat-label">Unpaid Invoices</div>
+                        </div>
+                        <span style={{ fontSize: '32px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.08))' }}>💳</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-                <section className="dashboard-section" style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                        <h2 style={{ margin: 0, fontSize: '18px' }}>Recent Shipments</h2>
-                    </div>
+            <div className="dashboard-grid">
+                <section className="dashboard-section card" style={{ padding: '24px' }}>
+                    <h2>📋 Recent Shipments</h2>
                     {recentShipments.length > 0 ? (
                         <div className="table-responsive">
                             <table className="data-table">
@@ -135,56 +168,55 @@ export default function Dashboard({ onSelectShipment }) {
                                 <tbody>
                                     {recentShipments.map(s => (
                                         <tr key={s.id} onClick={() => onSelectShipment(s.id)} style={{ cursor: 'pointer' }}>
-                                            <td className="mono" style={{ fontSize: '12px' }}>{s.id.substring(0, 8)}...</td>
+                                            <td className="mono" style={{ fontSize: '13px' }}>{s.id.substring(0, 8)}...</td>
                                             <td>{s.receiver_name}</td>
                                             <td>
-                                                <span className="status-badge" style={{ backgroundColor: getStatusColor(s.status), fontSize: '10px' }}>
+                                                <span className={`status-badge ${s.status}`} style={{ fontSize: '11px', padding: '3px 8px' }}>
                                                     {s.status}
                                                 </span>
                                             </td>
-                                            <td>{s.carrier.toUpperCase()}</td>
+                                            <td style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '13px' }}>{s.carrier}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     ) : (
-                        <p className="text-muted">No recent shipments found.</p>
+                        <div className="empty-state">
+                            <p>No recent shipments found.</p>
+                        </div>
                     )}
                 </section>
 
-                <section className="dashboard-section" style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px', marginBottom: '16px' }}>System Health</h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
+                <section className="dashboard-section card" style={{ padding: '24px' }}>
+                    <h2>⚡ System Health</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {Object.entries(serviceHealth).map(([name, isOk]) => (
-                            <div key={name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: '#f9fafb', borderRadius: '6px' }}>
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>{name} Service</span>
-                                <span style={{ 
-                                    width: '10px', 
-                                    height: '10px', 
-                                    borderRadius: '50%', 
-                                    background: isOk ? '#10b981' : '#ef4444',
-                                    boxShadow: isOk ? '0 0 8px #10b981' : '0 0 8px #ef4444'
-                                }}></span>
+                            <div 
+                                key={name} 
+                                className={`health-item ${isOk ? 'ok' : 'error'}`}
+                                style={{ 
+                                    display: 'flex', 
+                                    justifyContent: 'space-between', 
+                                    alignItems: 'center', 
+                                    padding: '10px 14px', 
+                                    background: '#f8fafc', 
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0'
+                                }}
+                            >
+                                <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#334155' }}>
+                                    {name} Service
+                                </span>
+                                <span className="health-dot-pulse"></span>
                             </div>
                         ))}
-                        {Object.keys(serviceHealth).length === 0 && <p className="text-muted">Checking services...</p>}
+                        {Object.keys(serviceHealth).length === 0 && (
+                            <p className="text-muted">Checking microservices health...</p>
+                        )}
                     </div>
                 </section>
             </div>
         </div>
     )
 }
-
-function getStatusColor(status) {
-    const colors = {
-        pending: '#f59e0b',
-        validated: '#3b82f6',
-        created: '#10b981',
-        processing: '#3b82f6',
-        delivered: '#10b981',
-        cancelled: '#ef4444',
-    }
-    return colors[status] || '#6b7280'
-}
-

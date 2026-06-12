@@ -108,10 +108,10 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
     return (
         <div className="shipment-detail">
             <div className="detail-header">
-                <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button className="btn btn-secondary" onClick={onBack}>← Back</button>
                     <h1>Shipment Details</h1>
-                    {isRefreshing && <span className="refreshing-indicator" style={{ fontSize: '12px', color: '#3b82f6' }}>🔄 Updating...</span>}
+                    {isRefreshing && <span className="refreshing-indicator" style={{ fontSize: '13px', color: 'var(--primary)', fontWeight: 600 }}>🔄 Updating...</span>}
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     {shipment.status === 'pending' && (
@@ -121,7 +121,7 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                     )}
                     {!isEditing && (
                         <button className="btn btn-outline" onClick={() => setIsEditing(true)}>
-                            ✏️ Edit
+                            ✏️ Edit details
                         </button>
                     )}
                     <button className="btn btn-primary" onClick={refreshData} disabled={isRefreshing || isEditing}>
@@ -131,39 +131,39 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
             </div>
 
             {isEditing ? (
-                <div className="detail-section">
+                <div className="detail-section card" style={{ padding: '32px' }}>
                     <h2>Edit Shipment Information</h2>
-                    <form onSubmit={handleUpdate}>
+                    <form onSubmit={handleUpdate} style={{ padding: '0', border: 'none' }}>
                         <div className="form-row">
                             <div className="form-group">
                                 <label>Sender Name</label>
-                                <input value={editForm.sender_name} onChange={e => setEditForm({...editForm, sender_name: e.target.value})} />
+                                <input value={editForm.sender_name || ''} onChange={e => setEditForm({...editForm, sender_name: e.target.value})} />
                             </div>
                             <div className="form-group">
                                 <label>Receiver Name</label>
-                                <input value={editForm.receiver_name} onChange={e => setEditForm({...editForm, receiver_name: e.target.value})} />
+                                <input value={editForm.receiver_name || ''} onChange={e => setEditForm({...editForm, receiver_name: e.target.value})} />
                             </div>
                         </div>
                         <div className="form-group">
                             <label>Sender Address</label>
-                            <input value={editForm.sender_address} onChange={e => setEditForm({...editForm, sender_address: e.target.value})} />
+                            <input value={editForm.sender_address || ''} onChange={e => setEditForm({...editForm, sender_address: e.target.value})} />
                         </div>
                         <div className="form-group">
                             <label>Receiver Address</label>
-                            <input value={editForm.receiver_address} onChange={e => setEditForm({...editForm, receiver_address: e.target.value})} />
+                            <input value={editForm.receiver_address || ''} onChange={e => setEditForm({...editForm, receiver_address: e.target.value})} />
                         </div>
                         <div className="form-group">
                             <label>Item Description</label>
-                            <input value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+                            <input value={editForm.description || ''} onChange={e => setEditForm({...editForm, description: e.target.value})} />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
                                 <label>Weight (kg)</label>
-                                <input type="number" step="0.1" value={editForm.weight} onChange={e => setEditForm({...editForm, weight: parseFloat(e.target.value)})} />
+                                <input type="number" step="0.1" value={editForm.weight || ''} onChange={e => setEditForm({...editForm, weight: parseFloat(e.target.value)})} />
                             </div>
                             <div className="form-group">
                                 <label>Carrier</label>
-                                <input value={editForm.carrier} onChange={e => setEditForm({...editForm, carrier: e.target.value})} />
+                                <input value={editForm.carrier || ''} onChange={e => setEditForm({...editForm, carrier: e.target.value})} />
                             </div>
                         </div>
                         <div className="form-actions">
@@ -174,23 +174,24 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                 </div>
             ) : (
                 <div className="detail-grid">
-                    <div className="detail-section">
-                        <h2>Basic Information</h2>
+                    {/* Basic Manifest Card */}
+                    <div className="detail-section card">
+                        <h2>📌 Manifest Details</h2>
                         <div className="info-group">
                             <div className="info-row">
                                 <span className="label">Shipment ID:</span>
-                                <span className="value mono">{shipment.id}</span>
+                                <span className="value mono" style={{ fontSize: '13px' }}>{shipment.id}</span>
                             </div>
                             <div className="info-row">
                                 <span className="label">Status:</span>
                                 <span className="value">
-                                    <span className="status-badge" style={{ backgroundColor: getStatusColor(shipment.status) }}>
+                                    <span className={`status-badge ${shipment.status}`}>
                                         {shipment.status}
                                     </span>
                                 </span>
                             </div>
                             <div className="info-row">
-                                <span className="label">Tracking Number:</span>
+                                <span className="label">Tracking ID:</span>
                                 <span className="value">
                                     {shipment.tracking_number ? (
                                         <a 
@@ -202,37 +203,38 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                                             {shipment.tracking_number} 🔗
                                         </a>
                                     ) : (
-                                        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Pending label generation...</span>
+                                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Awaiting manifest generation...</span>
                                     )}
                                 </span>
                             </div>
                             <div className="info-row">
-                                <span className="label">Carrier:</span>
-                                <span className="value">{shipment.carrier}</span>
+                                <span className="label">Selected Carrier:</span>
+                                <span className="value" style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>{shipment.carrier}</span>
                             </div>
                             <div className="info-row">
                                 <span className="label">Service Type:</span>
-                                <span className="value">{shipment.service_type}</span>
+                                <span className="value" style={{ textTransform: 'capitalize' }}>{shipment.service_type?.replace(/_/g, ' ')}</span>
                             </div>
                             <div className="info-row">
                                 <span className="label">Description:</span>
-                                <span className="value">{shipment.description || 'No description'}</span>
+                                <span className="value">{shipment.description || 'No description provided'}</span>
                             </div>
                             {shipment.is_international && (
-                                <div className="info-row">
+                                <div className="info-row" style={{ backgroundColor: 'var(--info-bg)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--info-border)' }}>
                                     <span className="label">Customs:</span>
                                     <span className="value">
-                                        <span style={{ color: '#059669', fontWeight: 600 }}>International</span> 
-                                        ({shipment.customs_value} {shipment.customs_currency})
+                                        <span style={{ color: 'var(--info-text)', fontWeight: 'bold' }}>International</span>
+                                        {` (${shipment.customs_value} ${shipment.customs_currency})`}
                                     </span>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    <div className="detail-section">
+                    {/* Billing Details Card */}
+                    <div className="detail-section card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <h2 style={{ margin: 0 }}>Billing & Payment</h2>
+                            <h2 style={{ margin: 0 }}>💳 Financial Manifest</h2>
                             {invoice && invoice.status === 'pending' && (
                                 <button className="btn btn-primary btn-sm" onClick={handleProcessPayment}>
                                     Pay Now
@@ -243,18 +245,18 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                             <div className="info-group">
                                 <div className="info-row">
                                     <span className="label">Invoice ID:</span>
-                                    <span className="value mono">{invoice.id}</span>
+                                    <span className="value mono" style={{ fontSize: '13px' }}>{invoice.id}</span>
                                 </div>
                                 <div className="info-row">
-                                    <span className="label">Amount:</span>
-                                    <span className="value" style={{ fontWeight: 'bold' }}>
-                                        {invoice.amount} {invoice.currency}
+                                    <span className="label">Amount Due:</span>
+                                    <span className="value" style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '18px' }}>
+                                        ${invoice.amount.toFixed(2)} {invoice.currency}
                                     </span>
                                 </div>
                                 <div className="info-row">
                                     <span className="label">Payment Status:</span>
                                     <span className="value">
-                                        <span className="status-badge" style={{ backgroundColor: invoice.status === 'paid' ? '#10b981' : '#f59e0b' }}>
+                                        <span className={`status-badge ${invoice.status === 'paid' ? 'created' : 'pending'}`}>
                                             {invoice.status}
                                         </span>
                                     </span>
@@ -265,16 +267,17 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                                 </div>
                             </div>
                         ) : (
-                            <p style={{ color: '#6b7280', fontSize: '14px' }}>No invoice generated yet.</p>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontStyle: 'italic' }}>No billing invoicing generated yet.</p>
                         )}
                     </div>
 
-                    <div className="detail-section">
-                        <h2>Sender Information</h2>
+                    {/* Sender Details Card */}
+                    <div className="detail-section card">
+                        <h2>👤 Origin Address</h2>
                         <div className="info-group">
                             <div className="info-row">
                                 <span className="label">Name:</span>
-                                <span className="value">{shipment.sender_name}</span>
+                                <span className="value" style={{ fontWeight: 'bold' }}>{shipment.sender_name}</span>
                             </div>
                             <div className="info-row">
                                 <span className="label">Address:</span>
@@ -287,12 +290,13 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                         </div>
                     </div>
 
-                    <div className="detail-section">
-                        <h2>Receiver Information</h2>
+                    {/* Receiver Details Card */}
+                    <div className="detail-section card">
+                        <h2>📍 Destination Address</h2>
                         <div className="info-group">
                             <div className="info-row">
                                 <span className="label">Name:</span>
-                                <span className="value">{shipment.receiver_name}</span>
+                                <span className="value" style={{ fontWeight: 'bold' }}>{shipment.receiver_name}</span>
                             </div>
                             <div className="info-row">
                                 <span className="label">Address:</span>
@@ -305,9 +309,10 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                         </div>
                     </div>
 
-                    <div className="detail-section">
+                    {/* Package Specifications Card */}
+                    <div className="detail-section card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <h2 style={{ margin: 0 }}>Package Details</h2>
+                            <h2 style={{ margin: 0 }}>📦 Package Specifications</h2>
                             {shipment.status === 'delivered' && returnRequests.length === 0 && (
                                 <button className="btn btn-secondary btn-sm" onClick={handleRequestReturn}>
                                     Request Return
@@ -325,49 +330,50 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                             </div>
                             <div className="info-row">
                                 <span className="label">Estimated Cost:</span>
-                                <span className="value">${shipment.cost?.toFixed(2) || '0.00'}</span>
+                                <span className="value" style={{ fontWeight: 'bold' }}>${shipment.cost?.toFixed(2) || '0.00'}</span>
                             </div>
                             <div className="info-row">
-                                <span className="label">Created:</span>
+                                <span className="label">Dispatch Date:</span>
                                 <span className="value">{new Date(shipment.created_at).toLocaleString()}</span>
                             </div>
                             {shipment.pickup_location_id && (
                                 <div className="info-row">
-                                    <span className="label">Pickup Location:</span>
+                                    <span className="label">FedEx Pickup Terminal:</span>
                                     <span className="value mono">{shipment.pickup_location_id}</span>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    <div className="detail-section">
-                        <h2>Shipping Label & Center</h2>
+                    {/* Label PDF Actions Card */}
+                    <div className="detail-section card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <h2>🏷️ Active Shipping Label</h2>
                         {shipment.label_url ? (
                             <div className="info-group">
                                 <div className="info-row">
                                     <span className="label">Label ID:</span>
-                                    <span className="value mono">{shipment.label_id}</span>
+                                    <span className="value mono" style={{ fontSize: '13px' }}>{shipment.label_id}</span>
                                 </div>
                                 <div className="info-row">
-                                    <span className="label">Action:</span>
+                                    <span className="label">Actions:</span>
                                     <div style={{ display: 'flex', gap: '8px' }}>
                                         <a href={shipment.label_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                                            📄 View PDF
+                                            📄 Open PDF Label
                                         </a>
                                         <a href={shipment.label_url} download className="btn btn-outline btn-sm">
                                             📥 Download
                                         </a>
                                     </div>
                                 </div>
-                                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '10px' }}>
-                                    Label generated by <strong>{shipment.carrier}</strong> systems.
+                                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
+                                    Label generated and verified by <strong>{shipment.carrier?.toUpperCase()}</strong> routing servers.
                                 </p>
                             </div>
                         ) : (
                             <div>
-                                <p style={{ color: '#6b7280', fontSize: '14px' }}>Label generation is in progress...</p>
-                                <div className="loading-bar-container" style={{ height: '8px', background: '#e5e7eb', borderRadius: '4px', marginTop: '10px', overflow: 'hidden' }}>
-                                    <div className="loading-bar" style={{ height: '100%', width: '60%', background: '#3b82f6', borderRadius: '4px' }}></div>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontStyle: 'italic' }}>Creating label manifest in background...</p>
+                                <div className="loading-bar-container" style={{ height: '8px', background: '#cbd5e1', borderRadius: '4px', marginTop: '12px', overflow: 'hidden' }}>
+                                    <div className="loading-bar" style={{ height: '100%', width: '70%', background: 'var(--primary)', borderRadius: '4px' }}></div>
                                 </div>
                             </div>
                         )}
@@ -375,32 +381,33 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                 </div>
             )}
 
+            {/* Return Manifest Overlay Card */}
             {!isEditing && returnRequests.length > 0 && (
-                <div className="detail-section" style={{ marginTop: '20px' }}>
-                    <h2>Return Requests</h2>
+                <div className="detail-section card" style={{ marginTop: '24px' }}>
+                    <h2>↩️ Return Manifest Requests</h2>
                     <div className="table-responsive">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
+                                    <th>Return ID</th>
                                     <th>Reason</th>
                                     <th>Status</th>
-                                    <th>Tracking</th>
-                                    <th>Created</th>
+                                    <th>Return Tracking ID</th>
+                                    <th>Created At</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {returnRequests.map(ret => (
                                     <tr key={ret.id}>
-                                        <td className="mono">{ret.id}</td>
+                                        <td className="mono" style={{ fontSize: '13px' }}>{ret.id}</td>
                                         <td>{ret.reason}</td>
                                         <td>
-                                            <span className="status-badge" style={{ backgroundColor: getStatusColor(ret.status) }}>
+                                            <span className={`status-badge ${ret.status}`}>
                                                 {ret.status}
                                             </span>
                                         </td>
-                                        <td className="mono">{ret.return_tracking_number || 'Pending'}</td>
-                                        <td>{new Date(ret.created_at).toLocaleDateString()}</td>
+                                        <td className="mono">{ret.return_tracking_number || 'Pending Allocation'}</td>
+                                        <td className="text-muted">{new Date(ret.created_at).toLocaleDateString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -409,20 +416,27 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
                 </div>
             )}
 
+            {/* Timeline Progress Tracker */}
             {!isEditing && trackingHistory.length > 0 && (
-                <div className="detail-section" style={{ marginTop: '20px' }}>
-                    <h2>Tracking Timeline</h2>
+                <div className="detail-section card" style={{ marginTop: '24px' }}>
+                    <h2>📍 Carrier Tracking History</h2>
                     <div className="timeline">
                         {trackingHistory.map((event, idx) => (
                             <div key={idx} className="timeline-item">
                                 <div className="timeline-dot"></div>
                                 <div className="timeline-content">
-                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <strong>{event.status.toUpperCase()}</strong>
-                                        <small className="text-muted">{new Date(event.timestamp).toLocaleString()}</small>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <strong style={{ fontSize: '14px', color: 'var(--primary)', textTransform: 'uppercase' }}>
+                                            {event.status}
+                                        </strong>
+                                        <small className="text-muted" style={{ fontSize: '12px' }}>{new Date(event.timestamp).toLocaleString()}</small>
                                     </div>
-                                    <p>{event.location}</p>
-                                    {event.description && <p style={{ fontSize: '13px', fontStyle: 'italic' }}>{event.description}</p>}
+                                    <p style={{ fontWeight: '500', marginTop: '4px', fontSize: '13.5px' }}>{event.location}</p>
+                                    {event.description && (
+                                        <p style={{ fontSize: '12.5px', fontStyle: 'italic', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                            {event.description}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -435,7 +449,6 @@ export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
 
 function getTrackingUrl(carrier, trackingId) {
     if (!trackingId) return '#'
-    
     switch (carrier?.toLowerCase()) {
         case 'dhl':
             return `https://www.dhl.com/track?tracking-id=${trackingId}`
@@ -449,19 +462,3 @@ function getTrackingUrl(carrier, trackingId) {
             return '#'
     }
 }
-
-function getStatusColor(status) {
-    const colors = {
-        pending: '#f59e0b',
-        validated: '#3b82f6',
-        created: '#10b981',
-        processing: '#3b82f6',
-        in_transit: '#3b82f6',
-        delivered: '#10b981',
-        cancelled: '#ef4444',
-        failed: '#ef4444',
-        approved: '#10b981',
-    }
-    return colors[status] || '#6b7280'
-}
-

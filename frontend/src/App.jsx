@@ -92,7 +92,7 @@ const renderContent = () => {
     case 'dashboard':
       return <Dashboard onSelectShipment={handleSelectShipment} />
     case 'list':
-      return <ShipmentList onSelectShipment={handleSelectShipment} />
+      return <ShipmentList onSelectShipment={handleSelectShipment} onNavigate={handleNavigate} />
     case 'detail':
       return <ShipmentDetail shipmentId={selectedShipmentId} onBack={() => setView('list')} onNavigate={handleNavigate} />
     case 'create':

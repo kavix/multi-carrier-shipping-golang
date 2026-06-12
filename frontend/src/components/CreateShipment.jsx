@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { shipments, carriers } from '../services/api'
+import { shipments, carriers, addresses } from '../services/api'
 
 export default function CreateShipment({ onSuccess, onCancel }) {
     const [formData, setFormData] = useState({
@@ -41,7 +41,7 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                     ...prev,
                     [type === 'sender' ? 'sender_address' : 'receiver_address']: standardized
                 }))
-                alert(`Address validated successfully! Standardized to: \${standardized}`)
+                alert(`Address validated successfully! Standardized to: ${standardized}`)
             } else {
                 alert('Address could not be validated. Please check the details.')
             }
@@ -130,117 +130,127 @@ export default function CreateShipment({ onSuccess, onCancel }) {
     }
 
     return (
-        <div className="create-shipment">
-            <div className="form-header">
-                <h1>Create New Shipment</h1>
+        <div className="create-shipment" style={{ maxWidth: '850px' }}>
+            <div className="list-header">
+                <div>
+                    <h1>Create New Shipment</h1>
+                    <p className="subtitle">Dispatch parcels through integrated global carrier gateways</p>
+                </div>
                 <button className="btn btn-secondary" onClick={onCancel}>× Close</button>
             </div>
 
             {error && <div className="alert alert-error">{error}</div>}
 
-            <form onSubmit={handleSubmit}>
-                <fieldset>
-                    <legend>Sender Information</legend>
-                    <div className="form-group">
-                        <label htmlFor="sender_name">Name *</label>
-                        <input
-                            type="text"
-                            id="sender_name"
-                            name="sender_name"
-                            value={formData.sender_name}
-                            onChange={handleChange}
-                            required
-                            placeholder="John Doe"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="sender_address" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            Address *
-                            <button 
-                                type="button" 
-                                className="btn-text" 
-                                style={{ color: '#3b82f6', fontSize: '12px', border: 'none', background: 'none', cursor: 'pointer' }}
-                                onClick={() => validateAddress('sender')}
-                                disabled={isValidating.sender}
-                            >
-                                {isValidating.sender ? 'Validating...' : '✨ Validate Address'}
-                            </button>
-                        </label>
-                        <input
-                            type="text"
-                            id="sender_address"
-                            name="sender_address"
-                            value={formData.sender_address}
-                            onChange={handleChange}
-                            required
-                            placeholder="123 Main St, New York, NY 10001"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="sender_email">Email</label>
-                        <input
-                            type="email"
-                            id="sender_email"
-                            name="sender_email"
-                            value={formData.sender_email}
-                            onChange={handleChange}
-                            placeholder="john@example.com"
-                        />
-                    </div>
-                </fieldset>
+            <form onSubmit={handleSubmit} className="card" style={{ padding: '32px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+                    <fieldset style={{ borderBottom: 'none', paddingBottom: 0 }}>
+                        <legend style={{ fontSize: '18px', borderBottom: '2.5px solid var(--border-color)', paddingBottom: '8px', marginBottom: '20px' }}>
+                            👤 Sender Details
+                        </legend>
+                        
+                        <div className="form-group">
+                            <label htmlFor="sender_name">Full Name *</label>
+                            <input
+                                type="text"
+                                id="sender_name"
+                                name="sender_name"
+                                value={formData.sender_name}
+                                onChange={handleChange}
+                                required
+                                placeholder="John Doe"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="sender_address" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Address *
+                                <button 
+                                    type="button" 
+                                    style={{ color: 'var(--primary)', fontSize: '12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}
+                                    onClick={() => validateAddress('sender')}
+                                    disabled={isValidating.sender}
+                                >
+                                    {isValidating.sender ? 'Validating...' : '✨ Standardize Address'}
+                                </button>
+                            </label>
+                            <input
+                                type="text"
+                                id="sender_address"
+                                name="sender_address"
+                                value={formData.sender_address}
+                                onChange={handleChange}
+                                required
+                                placeholder="123 Main St, New York, NY 10001"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="sender_email">Email Address</label>
+                            <input
+                                type="email"
+                                id="sender_email"
+                                name="sender_email"
+                                value={formData.sender_email}
+                                onChange={handleChange}
+                                placeholder="john@example.com"
+                            />
+                        </div>
+                    </fieldset>
 
-                <fieldset>
-                    <legend>Receiver Information</legend>
-                    <div className="form-group">
-                        <label htmlFor="receiver_name">Name *</label>
-                        <input
-                            type="text"
-                            id="receiver_name"
-                            name="receiver_name"
-                            value={formData.receiver_name}
-                            onChange={handleChange}
-                            required
-                            placeholder="Jane Smith"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="receiver_address" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            Address *
-                            <button 
-                                type="button" 
-                                className="btn-text" 
-                                style={{ color: '#3b82f6', fontSize: '12px', border: 'none', background: 'none', cursor: 'pointer' }}
-                                onClick={() => validateAddress('receiver')}
-                                disabled={isValidating.receiver}
-                            >
-                                {isValidating.receiver ? 'Validating...' : '✨ Validate Address'}
-                            </button>
-                        </label>
-                        <input
-                            type="text"
-                            id="receiver_address"
-                            name="receiver_address"
-                            value={formData.receiver_address}
-                            onChange={handleChange}
-                            required
-                            placeholder="456 Oak Ave, Los Angeles, CA 90001"
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="receiver_email">Email</label>
-                        <input
-                            type="email"
-                            id="receiver_email"
-                            name="receiver_email"
-                            value={formData.receiver_email}
-                            onChange={handleChange}
-                            placeholder="jane@example.com"
-                        />
-                    </div>
-                </fieldset>
+                    <fieldset style={{ borderBottom: 'none', paddingBottom: 0 }}>
+                        <legend style={{ fontSize: '18px', borderBottom: '2.5px solid var(--border-color)', paddingBottom: '8px', marginBottom: '20px' }}>
+                            📍 Receiver Details
+                        </legend>
+                        
+                        <div className="form-group">
+                            <label htmlFor="receiver_name">Full Name *</label>
+                            <input
+                                type="text"
+                                id="receiver_name"
+                                name="receiver_name"
+                                value={formData.receiver_name}
+                                onChange={handleChange}
+                                required
+                                placeholder="Jane Smith"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="receiver_address" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Address *
+                                <button 
+                                    type="button" 
+                                    style={{ color: 'var(--primary)', fontSize: '12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}
+                                    onClick={() => validateAddress('receiver')}
+                                    disabled={isValidating.receiver}
+                                >
+                                    {isValidating.receiver ? 'Validating...' : '✨ Standardize Address'}
+                                </button>
+                            </label>
+                            <input
+                                type="text"
+                                id="receiver_address"
+                                name="receiver_address"
+                                value={formData.receiver_address}
+                                onChange={handleChange}
+                                required
+                                placeholder="456 Oak Ave, Los Angeles, CA 90001"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="receiver_email">Email Address</label>
+                            <input
+                                type="email"
+                                id="receiver_email"
+                                name="receiver_email"
+                                value={formData.receiver_email}
+                                onChange={handleChange}
+                                placeholder="jane@example.com"
+                            />
+                        </div>
+                    </fieldset>
+                </div>
 
-                <fieldset>
-                    <legend>Package Details</legend>
+                <fieldset style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '24px' }}>
+                    <legend style={{ fontSize: '18px', marginBottom: '20px' }}>📦 Package & Carrier Parameters</legend>
+                    
                     <div className="form-group">
                         <label htmlFor="description">Item Description *</label>
                         <input
@@ -253,6 +263,7 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                             placeholder="e.g. Books, Electronics, Clothing"
                         />
                     </div>
+                    
                     <div className="form-row">
                         <div className="form-group">
                             <label htmlFor="weight">Weight (kg) *</label>
@@ -263,8 +274,8 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                 value={formData.weight}
                                 onChange={handleChange}
                                 required
-                                step="0.1"
-                                placeholder="0.5"
+                                step="0.01"
+                                placeholder="0.50"
                             />
                         </div>
                         <div className="form-group">
@@ -275,11 +286,14 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                 name="dimensions"
                                 value={formData.dimensions}
                                 onChange={handleChange}
-                                placeholder="20x15x10"
+                                placeholder="e.g. 20x15x10"
                             />
                         </div>
+                    </div>
+
+                    <div className="form-row" style={{ marginTop: '10px' }}>
                         <div className="form-group">
-                            <label htmlFor="carrier">Carrier *</label>
+                            <label htmlFor="carrier">Select Carrier *</label>
                             <select
                                 id="carrier"
                                 name="carrier"
@@ -287,13 +301,13 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                 onChange={handleChange}
                                 required
                             >
-                                <option value="dhl">DHL</option>
-                                <option value="fedex">FedEx</option>
-                                <option value="ups">UPS</option>
+                                <option value="dhl">DHL Express</option>
+                                <option value="fedex">FedEx Corporation</option>
+                                <option value="ups">United Parcel Service</option>
                             </select>
                         </div>
                         <div className="form-group">
-                            <label htmlFor="service_type">Service Type *</label>
+                            <label htmlFor="service_type">Select Service Type *</label>
                             <select
                                 id="service_type"
                                 name="service_type"
@@ -310,10 +324,10 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                     </>
                                 ) : (
                                     <>
-                                        <option value="standard">Standard / Ground</option>
-                                        <option value="express">Express / Air</option>
-                                        <option value="overnight">Overnight</option>
-                                        <option value="economy">Economy</option>
+                                        <option value="standard">Standard / Ground Delivery</option>
+                                        <option value="express">Express / Air Delivery</option>
+                                        <option value="overnight">Overnight Delivery</option>
+                                        <option value="economy">Economy Saver</option>
                                     </>
                                 )}
                             </select>
@@ -321,7 +335,7 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                     </div>
 
                     {formData.carrier === 'fedex' && (
-                        <div className="form-row" style={{ marginTop: '12px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                        <div className="form-row" style={{ marginTop: '16px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1.5px solid var(--border-color)' }}>
                             <div className="form-group">
                                 <label htmlFor="account_number">FedEx Account Number</label>
                                 <input
@@ -330,7 +344,7 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                     name="account_number"
                                     value={formData.account_number || ''}
                                     onChange={handleChange}
-                                    placeholder="740561073"
+                                    placeholder="e.g. 740561073"
                                 />
                             </div>
                             <div className="form-group">
@@ -350,21 +364,21 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                         </div>
                     )}
 
-                    <div className="form-group" style={{ marginTop: '16px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <div className="form-group" style={{ marginTop: '20px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 600 }}>
                             <input
                                 type="checkbox"
                                 name="is_international"
                                 checked={formData.is_international}
                                 onChange={e => setFormData(prev => ({ ...prev, is_international: e.target.checked }))}
-                                style={{ width: 'auto' }}
+                                style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
                             />
-                            International Shipment (Requires Customs Data)
+                            This is an International Shipment (Requires Customs Declarations)
                         </label>
                     </div>
 
                     {formData.is_international && (
-                        <div className="form-row" style={{ marginTop: '12px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                        <div className="form-row" style={{ marginTop: '12px', padding: '20px', backgroundColor: 'var(--info-bg)', borderRadius: '12px', border: '1px solid var(--info-border)' }}>
                             <div className="form-group">
                                 <label htmlFor="customs_value">Total Customs Value *</label>
                                 <input
@@ -378,17 +392,17 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                 />
                             </div>
                             <div className="form-group">
-                                <label htmlFor="customs_currency">Currency</label>
+                                <label htmlFor="customs_currency">Customs Currency</label>
                                 <select
                                     id="customs_currency"
                                     name="customs_currency"
                                     value={formData.customs_currency}
                                     onChange={handleChange}
                                 >
-                                    <option value="USD">USD</option>
-                                    <option value="EUR">EUR</option>
-                                    <option value="GBP">GBP</option>
-                                    <option value="LKR">LKR</option>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                    <option value="LKR">LKR (₨)</option>
                                 </select>
                             </div>
                         </div>
@@ -396,42 +410,42 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                 </fieldset>
 
                 {formData.carrier === 'fedex' && (
-                    <fieldset className="fedex-locations">
-                        <legend>FedEx Locations</legend>
+                    <fieldset style={{ borderBottom: 'none', paddingBottom: 0 }}>
+                        <legend style={{ fontSize: '18px', marginBottom: '20px' }}>🏢 FedEx Locations Lookup</legend>
                         <div className="form-row">
                             <div className="form-group">
-                                <label htmlFor="pickup_location_id">Select Pickup Location (Optional)</label>
+                                <label htmlFor="pickup_location_id">Select Local Pickup Point (Optional)</label>
                                 <select
                                     id="pickup_location_id"
                                     name="pickup_location_id"
                                     value={formData.pickup_location_id}
                                     onChange={handleChange}
                                 >
-                                    <option value="">-- Use Sender Address --</option>
+                                    <option value="">-- Drop off/Dispatch at Sender Address --</option>
                                     {pickupLocations.map(loc => (
                                         <option key={loc.id} value={loc.id}>
                                             {loc.name} ({loc.address}, {loc.city})
                                         </option>
                                     ))}
                                 </select>
-                                {searchingLocations && <small>Searching...</small>}
+                                {searchingLocations && <small style={{ color: 'var(--primary)', fontWeight: 600 }}>Searching local FedEx pickup terminals...</small>}
                             </div>
                             <div className="form-group">
-                                <label htmlFor="drop_location_id">Select Drop Location (Optional)</label>
+                                <label htmlFor="drop_location_id">Select Local Dropoff Terminal (Optional)</label>
                                 <select
                                     id="drop_location_id"
                                     name="drop_location_id"
                                     value={formData.drop_location_id}
                                     onChange={handleChange}
                                 >
-                                    <option value="">-- Deliver to Address --</option>
+                                    <option value="">-- Deliver Directly to Recipient Address --</option>
                                     {dropLocations.map(loc => (
                                         <option key={loc.id} value={loc.id}>
                                             {loc.name} ({loc.address}, {loc.city})
                                         </option>
                                     ))}
                                 </select>
-                                {searchingLocations && <small>Searching...</small>}
+                                {searchingLocations && <small style={{ color: 'var(--primary)', fontWeight: 600 }}>Searching local FedEx dropoff terminals...</small>}
                             </div>
                         </div>
                     </fieldset>
@@ -442,7 +456,7 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                         Cancel
                     </button>
                     <button type="submit" className="btn btn-primary" disabled={loading}>
-                        {loading ? 'Creating...' : 'Create Shipment'}
+                        {loading ? 'Processing manifest...' : '🚀 Create Shipment'}
                     </button>
                 </div>
             </form>
