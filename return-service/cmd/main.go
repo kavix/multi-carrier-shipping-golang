@@ -37,6 +37,7 @@ func main() {
 	h := handler.NewReturnHandler(svc)
 
 	r := gin.Default()
+	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.DownstreamContextMiddleware())
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "return-service"})

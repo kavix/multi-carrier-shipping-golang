@@ -25,11 +25,49 @@ export default function CreateShipment({ onSuccess, onCancel }) {
     const [pickupLocations, setPickupLocations] = useState([])
     const [dropLocations, setDropLocations] = useState([])
     const [searchingLocations, setSearchingLocations] = useState(false)
+    const [isValidating, setIsValidating] = useState({ sender: false, receiver: false })
+
+    const validateAddress = async (type) => {
+        const addr = type === 'sender' ? formData.sender_address : formData.receiver_address
+        if (!addr) return
+
+        try {
+            setIsValidating(prev => ({ ...prev, [type]: true }))
+            const result = await addresses.validate({ address: addr })
+            if (result.is_valid) {
+                // Update address with standardized version if available
+                const standardized = `${result.street}, ${result.city}, ${result.state} ${result.postal_code}, ${result.country}`
+                setFormData(prev => ({
+                    ...prev,
+                    [type === 'sender' ? 'sender_address' : 'receiver_address']: standardized
+                }))
+                alert(`Address validated successfully! Standardized to: \${standardized}`)
+            } else {
+                alert('Address could not be validated. Please check the details.')
+            }
+        } catch (err) {
+            alert('Validation error: ' + err.message)
+        } finally {
+            setIsValidating(prev => ({ ...prev, [type]: false }))
+        }
+    }
 
     useEffect(() => {
         if (formData.carrier === 'fedex') {
+            setFormData(prev => {
+                if (prev.service_type !== 'FEDEX_GROUND' && prev.service_type !== 'FEDEX_EXPRESS_SAVER' && prev.service_type !== 'STANDARD_OVERNIGHT' && prev.service_type !== 'INTERNATIONAL_PRIORITY') {
+                    return { ...prev, service_type: 'FEDEX_GROUND' }
+                }
+                return prev
+            })
             fetchLocations()
         } else {
+            setFormData(prev => {
+                if (prev.service_type === 'FEDEX_GROUND' || prev.service_type === 'FEDEX_EXPRESS_SAVER' || prev.service_type === 'STANDARD_OVERNIGHT' || prev.service_type === 'INTERNATIONAL_PRIORITY') {
+                    return { ...prev, service_type: 'standard' }
+                }
+                return prev
+            })
             setPickupLocations([])
             setDropLocations([])
         }
@@ -116,7 +154,18 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                         />
                     </div>
                     <div className="form-group">
-                        <label htmlFor="sender_address">Address *</label>
+                        <label htmlFor="sender_address" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            Address *
+                            <button 
+                                type="button" 
+                                className="btn-text" 
+                                style={{ color: '#3b82f6', fontSize: '12px', border: 'none', background: 'none', cursor: 'pointer' }}
+                                onClick={() => validateAddress('sender')}
+                                disabled={isValidating.sender}
+                            >
+                                {isValidating.sender ? 'Validating...' : '✨ Validate Address'}
+                            </button>
+                        </label>
                         <input
                             type="text"
                             id="sender_address"
@@ -155,7 +204,18 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                         />
                     </div>
                     <div className="form-group">
-                        <label htmlFor="receiver_address">Address *</label>
+                        <label htmlFor="receiver_address" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            Address *
+                            <button 
+                                type="button" 
+                                className="btn-text" 
+                                style={{ color: '#3b82f6', fontSize: '12px', border: 'none', background: 'none', cursor: 'pointer' }}
+                                onClick={() => validateAddress('receiver')}
+                                disabled={isValidating.receiver}
+                            >
+                                {isValidating.receiver ? 'Validating...' : '✨ Validate Address'}
+                            </button>
+                        </label>
                         <input
                             type="text"
                             id="receiver_address"
@@ -194,7 +254,44 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                         />
                     </div>
                     <div className="form-row">
-...
+                        <div className="form-group">
+                            <label htmlFor="weight">Weight (kg) *</label>
+                            <input
+                                type="number"
+                                id="weight"
+                                name="weight"
+                                value={formData.weight}
+                                onChange={handleChange}
+                                required
+                                step="0.1"
+                                placeholder="0.5"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="dimensions">Dimensions (LxWxH cm)</label>
+                            <input
+                                type="text"
+                                id="dimensions"
+                                name="dimensions"
+                                value={formData.dimensions}
+                                onChange={handleChange}
+                                placeholder="20x15x10"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="carrier">Carrier *</label>
+                            <select
+                                id="carrier"
+                                name="carrier"
+                                value={formData.carrier}
+                                onChange={handleChange}
+                                required
+                            >
+                                <option value="dhl">DHL</option>
+                                <option value="fedex">FedEx</option>
+                                <option value="ups">UPS</option>
+                            </select>
+                        </div>
                         <div className="form-group">
                             <label htmlFor="service_type">Service Type *</label>
                             <select
@@ -204,13 +301,54 @@ export default function CreateShipment({ onSuccess, onCancel }) {
                                 onChange={handleChange}
                                 required
                             >
-                                <option value="standard">Standard / Ground</option>
-                                <option value="express">Express / Air</option>
-                                <option value="overnight">Overnight</option>
-                                <option value="economy">Economy</option>
+                                {formData.carrier === 'fedex' ? (
+                                    <>
+                                        <option value="FEDEX_GROUND">FedEx Ground</option>
+                                        <option value="FEDEX_EXPRESS_SAVER">FedEx Express Saver</option>
+                                        <option value="STANDARD_OVERNIGHT">Standard Overnight</option>
+                                        <option value="INTERNATIONAL_PRIORITY">International Priority</option>
+                                    </>
+                                ) : (
+                                    <>
+                                        <option value="standard">Standard / Ground</option>
+                                        <option value="express">Express / Air</option>
+                                        <option value="overnight">Overnight</option>
+                                        <option value="economy">Economy</option>
+                                    </>
+                                )}
                             </select>
                         </div>
                     </div>
+
+                    {formData.carrier === 'fedex' && (
+                        <div className="form-row" style={{ marginTop: '12px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                            <div className="form-group">
+                                <label htmlFor="account_number">FedEx Account Number</label>
+                                <input
+                                    type="text"
+                                    id="account_number"
+                                    name="account_number"
+                                    value={formData.account_number || ''}
+                                    onChange={handleChange}
+                                    placeholder="740561073"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="packaging_type">Packaging Type</label>
+                                <select
+                                    id="packaging_type"
+                                    name="packaging_type"
+                                    value={formData.packaging_type || 'YOUR_PACKAGING'}
+                                    onChange={handleChange}
+                                >
+                                    <option value="YOUR_PACKAGING">Customer Packaging</option>
+                                    <option value="FEDEX_ENVELOPE">FedEx Envelope</option>
+                                    <option value="FEDEX_BOX">FedEx Box</option>
+                                    <option value="FEDEX_PAK">FedEx Pak</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="form-group" style={{ marginTop: '16px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>

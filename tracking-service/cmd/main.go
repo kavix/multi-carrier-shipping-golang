@@ -43,6 +43,7 @@ func main() {
 	// Start HTTP API
 	h := handler.NewTrackingHandler(svc)
 	r := gin.Default()
+	r.Use(middleware.CORSMiddleware())
 	// Extract user_id from headers set by API Gateway
 	r.Use(middleware.DownstreamContextMiddleware())
 

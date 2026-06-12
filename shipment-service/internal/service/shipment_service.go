@@ -62,6 +62,9 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
+	// FedEx-specific fields on req (AccountNumber, PackagingType) are ignored
+	// for non-FedEx carriers. They flow through the shipment.created event so
+	// label-generation-service can hand them to the real FedEx Ship API.
 
 	if err := s.repo.Create(ctx, shipment); err != nil {
 		return nil, fmt.Errorf("create shipment: %w", err)
@@ -87,6 +90,8 @@ func (s *ShipmentService) CreateShipment(ctx context.Context, userID string, req
 		"is_international":   shipment.IsInternational,
 		"customs_value":      shipment.CustomsValue,
 		"customs_currency":   shipment.CustomsCurrency,
+		"account_number":     req.AccountNumber,
+		"packaging_type":     req.PackagingType,
 		"event_type":         "shipment.created",
 	}
 	if err := s.createdProducer.Publish(ctx, shipment.ID, event); err != nil {
@@ -229,6 +234,9 @@ type CreateShipmentRequest struct {
 	IsInternational  bool    `json:"is_international"`
 	CustomsValue     float64 `json:"customs_value"`
 	CustomsCurrency  string  `json:"customs_currency"`
+	// FedEx-specific. Optional. Ignored when carrier != "fedex".
+	AccountNumber string `json:"account_number"`
+	PackagingType string `json:"packaging_type"`
 }
 
 type UpdateShipmentRequest struct {

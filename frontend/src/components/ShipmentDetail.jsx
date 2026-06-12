@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { shipments, tracking } from '../services/api'
+import { shipments, tracking, billing, returns } from '../services/api'
 
-export default function ShipmentDetail({ shipmentId, onBack }) {
+export default function ShipmentDetail({ shipmentId, onBack, onNavigate }) {
     const [shipment, setShipment] = useState(null)
     const [trackingHistory, setTrackingHistory] = useState([])
+    const [invoice, setInvoice] = useState(null)
+    const [returnRequests, setReturnRequests] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [isRefreshing, setIsRefreshing] = useState(false)
@@ -15,10 +17,10 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
 
         // Auto-refresh if shipment is not in a terminal state
         const pollInterval = setInterval(() => {
-            if (shipment && !isEditing && (shipment.status === 'pending' || shipment.status === 'validated' || shipment.status === 'processing')) {
+            if (shipment && !isEditing && (shipment.status === 'pending' || shipment.status === 'validated' || shipment.status === 'processing' || shipment.status === 'created')) {
                 refreshData()
             }
-        }, 3000)
+        }, 5000)
 
         return () => clearInterval(pollInterval)
     }, [shipmentId, shipment?.status, isEditing])
@@ -43,12 +45,17 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
             setShipment(shipmentData)
             if (!isEditing) setEditForm(shipmentData)
 
-            try {
-                const historyData = await tracking.getHistory(shipmentId)
-                setTrackingHistory(historyData || [])
-            } catch (err) {
-                // Tracking might not be available yet
-            }
+            // Fetch related data in parallel
+            const [historyData, invData, retData] = await Promise.all([
+                tracking.getHistory(shipmentId).catch(() => []),
+                billing.getInvoiceByShipment(shipmentId).catch(() => null),
+                returns.list(shipmentId).catch(() => [])
+            ])
+
+            setTrackingHistory(historyData || [])
+            setInvoice(invData)
+            setReturnRequests(retData || [])
+
             return shipmentData
         } catch (err) {
             console.error('Failed to refresh shipment data', err)
@@ -71,6 +78,29 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
         }
     }
 
+    const handleProcessPayment = async () => {
+        if (!invoice) return
+        try {
+            const result = await billing.processPayment({ invoice_id: invoice.id, method: 'stripe' })
+            if (result.checkout_url) {
+                window.location.href = result.checkout_url
+            }
+        } catch (err) {
+            alert('Payment failed: ' + err.message)
+        }
+    }
+
+    const handleRequestReturn = async () => {
+        const reason = window.prompt('Please enter the reason for return:')
+        if (!reason) return
+        try {
+            await returns.create({ shipment_id: shipmentId, reason })
+            await refreshData()
+        } catch (err) {
+            alert('Return request failed: ' + err.message)
+        }
+    }
+
     if (loading) return <div className="loading">Loading shipment details...</div>
     if (error) return <div className="alert alert-error">{error}</div>
     if (!shipment) return <div className="alert alert-error">Shipment not found</div>
@@ -78,12 +108,17 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
     return (
         <div className="shipment-detail">
             <div className="detail-header">
-                <div className="header-left">
+                <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button className="btn btn-secondary" onClick={onBack}>← Back</button>
                     <h1>Shipment Details</h1>
-                    {isRefreshing && <span className="refreshing-indicator">🔄 Updating...</span>}
+                    {isRefreshing && <span className="refreshing-indicator" style={{ fontSize: '12px', color: '#3b82f6' }}>🔄 Updating...</span>}
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
+                    {shipment.status === 'pending' && (
+                        <button className="btn btn-outline" onClick={() => onNavigate && onNavigate('rate-comparison', { shipmentId: shipment.id })}>
+                            📊 Compare Rates
+                        </button>
+                    )}
                     {!isEditing && (
                         <button className="btn btn-outline" onClick={() => setIsEditing(true)}>
                             ✏️ Edit
@@ -166,7 +201,9 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                                         >
                                             {shipment.tracking_number} 🔗
                                         </a>
-                                    ) : 'Not assigned'}
+                                    ) : (
+                                        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Pending label generation...</span>
+                                    )}
                                 </span>
                             </div>
                             <div className="info-row">
@@ -191,6 +228,45 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    <div className="detail-section">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h2 style={{ margin: 0 }}>Billing & Payment</h2>
+                            {invoice && invoice.status === 'pending' && (
+                                <button className="btn btn-primary btn-sm" onClick={handleProcessPayment}>
+                                    Pay Now
+                                </button>
+                            )}
+                        </div>
+                        {invoice ? (
+                            <div className="info-group">
+                                <div className="info-row">
+                                    <span className="label">Invoice ID:</span>
+                                    <span className="value mono">{invoice.id}</span>
+                                </div>
+                                <div className="info-row">
+                                    <span className="label">Amount:</span>
+                                    <span className="value" style={{ fontWeight: 'bold' }}>
+                                        {invoice.amount} {invoice.currency}
+                                    </span>
+                                </div>
+                                <div className="info-row">
+                                    <span className="label">Payment Status:</span>
+                                    <span className="value">
+                                        <span className="status-badge" style={{ backgroundColor: invoice.status === 'paid' ? '#10b981' : '#f59e0b' }}>
+                                            {invoice.status}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div className="info-row">
+                                    <span className="label">Due Date:</span>
+                                    <span className="value">{new Date(invoice.due_date).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <p style={{ color: '#6b7280', fontSize: '14px' }}>No invoice generated yet.</p>
+                        )}
                     </div>
 
                     <div className="detail-section">
@@ -230,7 +306,14 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                     </div>
 
                     <div className="detail-section">
-                        <h2>Package Details</h2>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h2 style={{ margin: 0 }}>Package Details</h2>
+                            {shipment.status === 'delivered' && returnRequests.length === 0 && (
+                                <button className="btn btn-secondary btn-sm" onClick={handleRequestReturn}>
+                                    Request Return
+                                </button>
+                            )}
+                        </div>
                         <div className="info-group">
                             <div className="info-row">
                                 <span className="label">Weight:</span>
@@ -241,7 +324,7 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                                 <span className="value">{shipment.dimensions || 'Not specified'}</span>
                             </div>
                             <div className="info-row">
-                                <span className="label">Cost:</span>
+                                <span className="label">Estimated Cost:</span>
                                 <span className="value">${shipment.cost?.toFixed(2) || '0.00'}</span>
                             </div>
                             <div className="info-row">
@@ -254,48 +337,92 @@ export default function ShipmentDetail({ shipmentId, onBack }) {
                                     <span className="value mono">{shipment.pickup_location_id}</span>
                                 </div>
                             )}
-                            {shipment.drop_location_id && (
-                                <div className="info-row">
-                                    <span className="label">Drop Location:</span>
-                                    <span className="value mono">{shipment.drop_location_id}</span>
-                                </div>
-                            )}
                         </div>
                     </div>
 
-                    {shipment.label_url && (
-                        <div className="detail-section">
-                            <h2>Shipping Label</h2>
+                    <div className="detail-section">
+                        <h2>Shipping Label & Center</h2>
+                        {shipment.label_url ? (
                             <div className="info-group">
                                 <div className="info-row">
                                     <span className="label">Label ID:</span>
                                     <span className="value mono">{shipment.label_id}</span>
                                 </div>
                                 <div className="info-row">
-                                    <span className="label">Label URL:</span>
-                                    <span className="value">
+                                    <span className="label">Action:</span>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
                                         <a href={shipment.label_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                                            Open PDF Label
+                                            📄 View PDF
                                         </a>
-                                    </span>
+                                        <a href={shipment.label_url} download className="btn btn-outline btn-sm">
+                                            📥 Download
+                                        </a>
+                                    </div>
+                                </div>
+                                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '10px' }}>
+                                    Label generated by <strong>{shipment.carrier}</strong> systems.
+                                </p>
+                            </div>
+                        ) : (
+                            <div>
+                                <p style={{ color: '#6b7280', fontSize: '14px' }}>Label generation is in progress...</p>
+                                <div className="loading-bar-container" style={{ height: '8px', background: '#e5e7eb', borderRadius: '4px', marginTop: '10px', overflow: 'hidden' }}>
+                                    <div className="loading-bar" style={{ height: '100%', width: '60%', background: '#3b82f6', borderRadius: '4px' }}></div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {!isEditing && returnRequests.length > 0 && (
+                <div className="detail-section" style={{ marginTop: '20px' }}>
+                    <h2>Return Requests</h2>
+                    <div className="table-responsive">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th>Tracking</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {returnRequests.map(ret => (
+                                    <tr key={ret.id}>
+                                        <td className="mono">{ret.id}</td>
+                                        <td>{ret.reason}</td>
+                                        <td>
+                                            <span className="status-badge" style={{ backgroundColor: getStatusColor(ret.status) }}>
+                                                {ret.status}
+                                            </span>
+                                        </td>
+                                        <td className="mono">{ret.return_tracking_number || 'Pending'}</td>
+                                        <td>{new Date(ret.created_at).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
             {!isEditing && trackingHistory.length > 0 && (
-                <div className="detail-section">
-                    <h2>Tracking History</h2>
+                <div className="detail-section" style={{ marginTop: '20px' }}>
+                    <h2>Tracking Timeline</h2>
                     <div className="timeline">
                         {trackingHistory.map((event, idx) => (
                             <div key={idx} className="timeline-item">
                                 <div className="timeline-dot"></div>
                                 <div className="timeline-content">
-                                    <strong>{event.status}</strong>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>{event.status.toUpperCase()}</strong>
+                                        <small className="text-muted">{new Date(event.timestamp).toLocaleString()}</small>
+                                    </div>
                                     <p>{event.location}</p>
-                                    <small className="text-muted">{new Date(event.timestamp).toLocaleString()}</small>
+                                    {event.description && <p style={{ fontSize: '13px', fontStyle: 'italic' }}>{event.description}</p>}
                                 </div>
                             </div>
                         ))}
@@ -318,9 +445,6 @@ function getTrackingUrl(carrier, trackingId) {
             return `https://www.ups.com/track?tracknum=${trackingId}`
         case 'usps':
             return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingId}`
-        case 'ems':
-        case 'slpost':
-            return `https://www.slpost.lk/track?tracking-id=${trackingId}`
         default:
             return '#'
     }
@@ -332,8 +456,12 @@ function getStatusColor(status) {
         validated: '#3b82f6',
         created: '#10b981',
         processing: '#3b82f6',
+        in_transit: '#3b82f6',
         delivered: '#10b981',
         cancelled: '#ef4444',
+        failed: '#ef4444',
+        approved: '#10b981',
     }
     return colors[status] || '#6b7280'
 }
+

@@ -392,6 +392,8 @@ services:
     build:
       context: .
       dockerfile: ./notification-service/Dockerfile
+    ports:
+      - "8009:8089"
     environment:
       KAFKA_BROKERS: kafka:29092
       # SMTP settings (can be provided via .env or environment)
@@ -408,7 +410,7 @@ services:
       kafka:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep '[s]ervice' || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8089/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

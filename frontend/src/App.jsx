@@ -78,39 +78,47 @@ export default function App() {
     setView('list')
     // Optionally show a success message
   }
+const [rateShipmentId, setRateShipmentId] = useState(null)
 
-  const renderContent = () => {
-    switch (view) {
-      case 'dashboard':
-        return <Dashboard />
-      case 'list':
-        return <ShipmentList onSelectShipment={handleSelectShipment} />
-      case 'detail':
-        return <ShipmentDetail shipmentId={selectedShipmentId} onBack={() => setView('list')} />
-      case 'create':
-        return <CreateShipment onSuccess={handleCreateSuccess} onCancel={() => setView('list')} />
-      case 'status-manager':
-        return <StatusManager />
-      case 'rate-comparison':
-        return <RateComparison />
-      case 'returns':
-        return <ReturnManager />
-      case 'billing':
-        return <BillingManager />
-      case 'carriers':
-        return <CarrierManager />
-      case 'address-tools':
-        return <AddressTools />
-      case 'labels':
-        return <LabelManager />
-      case 'test-runner':
-        return <TestRunner />
-      case 'settings':
-        return <Settings baseUrl={baseUrl} onBaseUrlChange={setBaseUrl} token={token} onTokenChange={setToken} />
-      case 'api-test':
-        return <ApiTestView baseUrl={baseUrl} token={token} />
-      default:
-        return <Dashboard />
+const handleNavigate = (newView, params = {}) => {
+  if (newView === 'rate-comparison' && params.shipmentId) {
+    setRateShipmentId(params.shipmentId)
+  }
+  setView(newView)
+}
+
+const renderContent = () => {
+  switch (view) {
+    case 'dashboard':
+      return <Dashboard onSelectShipment={handleSelectShipment} />
+    case 'list':
+      return <ShipmentList onSelectShipment={handleSelectShipment} />
+    case 'detail':
+      return <ShipmentDetail shipmentId={selectedShipmentId} onBack={() => setView('list')} onNavigate={handleNavigate} />
+    case 'create':
+      return <CreateShipment onSuccess={handleCreateSuccess} onCancel={() => setView('list')} />
+    case 'status-manager':
+      return <StatusManager />
+    case 'rate-comparison':
+      return <RateComparison initialShipmentId={rateShipmentId} />
+    case 'returns':
+      return <ReturnManager />
+    case 'billing':
+      return <BillingManager />
+    case 'carriers':
+      return <CarrierManager />
+    case 'address-tools':
+      return <AddressTools />
+    case 'labels':
+      return <LabelManager />
+    case 'test-runner':
+      return <TestRunner />
+    case 'settings':
+      return <Settings baseUrl={baseUrl} onBaseUrlChange={setBaseUrl} token={token} onTokenChange={setToken} />
+    case 'api-test':
+      return <ApiTestView baseUrl={baseUrl} token={token} />
+    default:
+      return <Dashboard />
     }
   }
 
@@ -172,7 +180,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item \${view === 'billing' ? 'active' : ''}`}
+              className={`nav-item ${view === 'billing' ? 'active' : ''}`}
               onClick={() => setView('billing')}
             >
               💳 Invoices & Payments
@@ -180,7 +188,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item \${view === 'carriers' ? 'active' : ''}`}
+              className={`nav-item ${view === 'carriers' ? 'active' : ''}`}
               onClick={() => setView('carriers')}
             >
               🚢 Carrier Manager
@@ -188,7 +196,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item \${view === 'address-tools' ? 'active' : ''}`}
+              className={`nav-item ${view === 'address-tools' ? 'active' : ''}`}
               onClick={() => setView('address-tools')}
             >
               📍 Address Tools
@@ -196,7 +204,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item \${view === 'labels' ? 'active' : ''}`}
+              className={`nav-item ${view === 'labels' ? 'active' : ''}`}
               onClick={() => setView('labels')}
             >
               🏷️ Label Center
@@ -204,7 +212,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item \${view === 'test-runner' ? 'active' : ''}`}
+              className={`nav-item ${view === 'test-runner' ? 'active' : ''}`}
               onClick={() => setView('test-runner')}
             >
               🚀 System Runner
@@ -212,7 +220,7 @@ export default function App() {
           </li>
           <li>
             <button
-              className={`nav-item \${view === 'api-test' ? 'active' : ''}`}
+              className={`nav-item ${view === 'api-test' ? 'active' : ''}`}
               onClick={() => setView('api-test')}
             >
               🧪 API Test

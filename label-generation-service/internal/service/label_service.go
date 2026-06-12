@@ -627,17 +627,87 @@ type fedexContactDTO struct {
 func buildFedExAddressDTO(addr string) fedexAddressDTO {
 	lines := formatAddressLines(addr)
 	postal := extractPostalCode(addr)
+	
+	city := ""
+	state := ""
+	country := "US"
+	
+	if len(lines) > 0 {
+		idx := len(lines) - 1
+		
+		// 1. Check if the last element is a country code
+		lastElem := strings.TrimSpace(lines[idx])
+		if len(lastElem) == 2 || len(lastElem) == 3 {
+			country = strings.ToUpper(lastElem)
+			if country == "USA" {
+				country = "US"
+			}
+			idx--
+		}
+		
+		// 2. The next element from the end usually contains State and/or Zip Code
+		if idx >= 0 {
+			stateZip := strings.TrimSpace(lines[idx])
+			parts := strings.Fields(stateZip)
+			if len(parts) >= 2 {
+				if len(parts[0]) == 2 {
+					state = strings.ToUpper(parts[0])
+				} else if len(parts[1]) == 2 {
+					state = strings.ToUpper(parts[1])
+				}
+			} else if len(stateZip) == 2 {
+				state = strings.ToUpper(stateZip)
+			}
+			idx--
+		}
+		
+		// 3. The next element from the end is typically the City
+		if idx >= 0 {
+			city = strings.TrimSpace(lines[idx])
+		}
+	}
+	
+	// 4. Construct clean StreetLines by excluding City, State, Zip, Country components
+	var streetLines []string
+	for i := 0; i < len(lines); i++ {
+		lineTrimmed := strings.TrimSpace(lines[i])
+		if lineTrimmed == "" {
+			continue
+		}
+		
+		isCity := (city != "" && strings.EqualFold(lineTrimmed, city))
+		isStateZip := false
+		if state != "" {
+			isStateZip = strings.Contains(strings.ToUpper(lineTrimmed), state)
+		}
+		isCountry := strings.EqualFold(lineTrimmed, country) || strings.EqualFold(lineTrimmed, "USA")
+		
+		if isCity || isStateZip || isCountry {
+			break
+		}
+		
+		streetLines = append(streetLines, lineTrimmed)
+	}
+	
+	// Fallback if street lines became empty
+	if len(streetLines) == 0 && len(lines) > 0 {
+		streetLines = []string{lines[0]}
+	}
+
 	return fedexAddressDTO{
-		StreetLines: lines,
-		PostalCode:  postal,
-		CountryCode: "US",
+		StreetLines:     streetLines,
+		City:            city,
+		StateOrProvince: state,
+		PostalCode:      postal,
+		CountryCode:     country,
 	}
 }
 
-func buildFedExContactDTO(name, email string) fedexContactDTO {
+func buildFedExContactDTO(name, email, phone string) fedexContactDTO {
 	return fedexContactDTO{
-		PersonName: name,
-		Email:      email,
+		PersonName:  name,
+		Email:       email,
+		PhoneNumber: phone,
 	}
 }
 
@@ -656,12 +726,24 @@ type fedexCreateShipmentResponse struct {
 // the Maroto-generated label when this returns an error.
 func (s *LabelService) createFedExShipment(ctx context.Context, carrierServiceURL string, details map[string]interface{}) ([]byte, string, error) {
 	shipmentID, _ := details["shipment_id"].(string)
+	accountNumber, _ := details["account_number"].(string)
+	if accountNumber == "" {
+		accountNumber = "740561073" // sandbox account, matches Python script
+	}
 	senderName, _ := details["sender_name"].(string)
 	senderAddr, _ := details["sender"].(string)
 	senderEmail, _ := details["sender_email"].(string)
+	senderPhone, _ := details["sender_phone"].(string)
+	if senderPhone == "" {
+		senderPhone = "9011234567" // default sandbox phone
+	}
 	receiverName, _ := details["receiver_name"].(string)
 	receiverAddr, _ := details["receiver"].(string)
 	receiverEmail, _ := details["receiver_email"].(string)
+	receiverPhone, _ := details["receiver_phone"].(string)
+	if receiverPhone == "" {
+		receiverPhone = "4041234567" // default sandbox phone
+	}
 	serviceType, _ := details["service_type"].(string)
 	weightF, _ := details["weight"].(float64)
 	isInternational, _ := details["is_international"].(bool)
@@ -686,15 +768,15 @@ func (s *LabelService) createFedExShipment(ctx context.Context, carrierServiceUR
 	}
 
 	payload := fedexCreateShipmentRequest{
-		AccountNumber:  "740561073", // sandbox account, matches Python script
+		AccountNumber:  accountNumber,
 		ServiceType:    serviceType,
 		PackagingType:  "YOUR_PACKAGING",
 		Weight:         weightF,
 		WeightUnits:    "LB",
 		Sender:         buildFedExAddressDTO(senderAddr),
-		SenderContact:  buildFedExContactDTO(senderName, senderEmail),
+		SenderContact:  buildFedExContactDTO(senderName, senderEmail, senderPhone),
 		Recipient:      buildFedExAddressDTO(receiverAddr),
-		RecipientContact: buildFedExContactDTO(receiverName, receiverEmail),
+		RecipientContact: buildFedExContactDTO(receiverName, receiverEmail, receiverPhone),
 		IsInternational:  isInternational,
 		TotalCustomsValue: customsValue,
 		TotalCustomsCurrency: customsCurrency,

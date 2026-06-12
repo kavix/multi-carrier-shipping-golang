@@ -70,7 +70,7 @@ export default function ShipmentList({ onSelectShipment }) {
             {error && <div className="alert alert-error">{error}</div>}
 
             <div className="filters">
-                {['all', 'pending', 'processing', 'delivered', 'cancelled'].map(status => (
+                {['all', 'pending', 'validated', 'processing', 'delivered', 'cancelled'].map(status => (
                     <button
                         key={status}
                         className={`filter-btn ${filter === status ? 'active' : ''}`}
