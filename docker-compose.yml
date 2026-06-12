@@ -481,6 +481,15 @@ services:
     depends_on:
       - kafka
 
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
 volumes:
   shipment-db:
   carrier-db:
